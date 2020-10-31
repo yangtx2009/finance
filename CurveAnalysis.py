@@ -87,7 +87,7 @@ def createLabels(input_length=30, output_length=7):
         take il days, predict the next ol days
     @return:
     '''
-
+    pass
 
 
 
