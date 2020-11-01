@@ -272,12 +272,12 @@ class Stock(ABC):
         min_max_scaler = preprocessing.MinMaxScaler()
         self.selected_data = joined.tail(showRows)
 
-        # print("current_data column title:", self.selected_data.columns)
-        scaled_array = min_max_scaler.fit_transform(self.selected_data.drop(["times"], axis=1))
-        df_normalized = pd.DataFrame(scaled_array)
-        df_normalized.columns = list(self.selected_data.drop(["times"], axis=1).columns.values)
-        df_normalized["times"] = self.selected_data["times"].values
-        self.selected_data = df_normalized
+        # # print("current_data column title:", self.selected_data.columns)
+        # scaled_array = min_max_scaler.fit_transform(self.selected_data.drop(["times"], axis=1))
+        # df_normalized = pd.DataFrame(scaled_array)
+        # df_normalized.columns = list(self.selected_data.drop(["times"], axis=1).columns.values)
+        # df_normalized["times"] = self.selected_data["times"].values
+        # self.selected_data = df_normalized
 
         # industry_names = self.averaged.keys()
         # fig, ax = plt.subplots()
@@ -321,6 +321,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mainWidget.setLayout(mainLayout)
 
         self.graphWidget = pg.PlotWidget()
+        self.graphWidget.setAspectLocked(10)
         mainLayout.addWidget(self.graphWidget,5)
 
         controlWidget = QtWidgets.QWidget()
@@ -344,10 +345,15 @@ class MainWindow(QtWidgets.QMainWindow):
         temperature = [30,32,34,32,33,31,29,32,35,45]
 
         self.graphWidget.setBackground('w')
+
         # print(type(self.graphWidget.plot(hour, temperature)))
         self.curves = {}
 
         # self.refreshList()
+
+    def setYRange(self, range):
+        self.enableAutoRange(axis='y')
+        self.setAutoVisible(y=True)
 
     def colors(self, n):
         ret = []
@@ -371,6 +377,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.times = temp.pop("times")
 
         self.times = [value for (key, value) in sorted(self.times.items())]
+        print("times", self.times)
+
 
         for key, value in temp.items():
             self.dataDict[key] = [value1 for (key1, value1) in sorted(value.items())]
@@ -393,23 +401,25 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def updatePlot(self):
         # self.graphWidget.clear()
+        num = None
         for i in range(self.checkBoxListWidget.count()):
             item = self.checkBoxListWidget.item(i)
             text = item.text()
             checked = item.checkState()
 
+            num = len(self.dataDict[text])
             if text in self.curves:
                 self.curves[text].setVisible(checked)
             else:
                 color = QtGui.QColor()
                 color.setHsv(*self.colorMap[i])
-                self.curves[text] = self.graphWidget.plot(np.arange(len(self.dataDict[text])),
+                self.curves[text] = self.graphWidget.plot(np.arange(num),
                                                          self.dataDict[text], pen=pg.mkPen(color=color, width=2))
                 self.curves[text].setVisible(checked)
 
-                    # self.graphWidget.plot(np.arange(len(self.dataDict[key])),
-                    #                                  self.dataDict[key])
-
+        ax = self.graphWidget.getAxis('bottom')
+        ticks = [list(zip(range(0, num, 10), [self.times[i] for i in range(0, num, 10)]))]
+        ax.setTicks(ticks)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)

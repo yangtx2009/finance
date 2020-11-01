@@ -1,23 +1,18 @@
 # finance
-## Preparation
-1. download SimHei.tff.
-2. copy SimHei.tff to `Anaconda3/Lib/site-packages/matplotlib/mpl-data/fonts/ttf`.
-3. change the following rows in file `matplotlibrc` in `Anaconda3/Lib/site-packages/matplotlib/mpl-data``.
-    ```
-    #font.family: sans-serif
-    #font.sans-serif: SimHei, ...
-    #axes.unicode_minus:False
-    ```
-4. reload matplotlib font by
-    ```
-    from matplotlib.font_manager import _rebuild
-    _rebuild()
-    ```
-
 ## Industries
+
+Comparison of total market values among industries in China
 
 ![picture](resources/mean_value_industries.png)
 
-The comprehensive industry has the highest averaged value.
+<!---The comprehensive industry has the highest averaged value.--->
 
-![picture](resources/mean_value_industries_times.png)
+<!---![picture](resources/mean_value_industries_times.png) --->
+
+## Industry Scope
+
+In stock.py, there is a GUI application which can selectively show different industries in the past 100 days.
+
+The values are calculated by averaging all stocks for each day.
+
+![image-20201101220551296](resources/industry_scope.png)
