@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from scipy import signal as sci_signal
 import tensorflow as tf
 
-from stock import Stock
+from Stock import Stock
 
 def drawData(numpy_data, processed, title):
     if not (numpy_data is None):
