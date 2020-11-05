@@ -15,8 +15,8 @@ class Trainer:
         self.input_feature_size = 1
         self.target_feature_size = 1
         self.dropout_rate = 0.1
-
         self.batch_size = 64
+        self.max_output_length = 7
 
         self.epochs = 20
 
@@ -108,11 +108,8 @@ class Trainer:
         enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(inp, tar_inp)
 
         with tf.GradientTape() as tape:
-            predictions, _ = self.transformer(inp, tar_inp,
-                                         True,
-                                         enc_padding_mask,
-                                         combined_mask,
-                                         dec_padding_mask)
+            predictions, _ = self.transformer(inp, tar_inp, True,
+                                         enc_padding_mask, combined_mask, dec_padding_mask)
             loss = self.loss_function(tar_real, predictions)
 
         gradients = tape.gradient(loss, self.transformer.trainable_variables)
@@ -139,42 +136,32 @@ class Trainer:
                 print('Saving checkpoint for epoch {} at {}'.format(epoch + 1, ckpt_save_path))
 
             print('Epoch {} Loss {:.4f}'.format(epoch + 1, self.train_loss.result()))
-
             print('Time taken for 1 epoch: {} secs\n'.format(time() - start))
 
-    # def evaluate(self, inp_sentence):
-    #
-    #     # 输入语句是葡萄牙语，增加开始和结束标记
-    #     inp_sentence = start_token + tokenizer_pt.encode(inp_sentence) + end_token
-    #     encoder_input = tf.expand_dims(inp_sentence, 0)
-    #
-    #     # 因为目标是英语，输入 transformer 的第一个词应该是
-    #     # 英语的开始标记。
-    #     decoder_input = [tokenizer_en.vocab_size]
-    #     output = tf.expand_dims(decoder_input, 0)
-    #
-    #     for i in range(MAX_LENGTH):
-    #         enc_padding_mask, combined_mask, dec_padding_mask = create_masks(
-    #             encoder_input, output)
-    #
-    #         # predictions.shape == (batch_size, seq_len, vocab_size)
-    #         predictions, attention_weights = transformer(encoder_input,
-    #                                                      output,
-    #                                                      False,
-    #                                                      enc_padding_mask,
-    #                                                      combined_mask,
-    #                                                      dec_padding_mask)
-    #
-    #         # 从 seq_len 维度选择最后一个词
-    #         predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
-    #
-    #         predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
-    #
-    #         # 如果 predicted_id 等于结束标记，就返回结果
-    #         if predicted_id == tokenizer_en.vocab_size + 1:
-    #             return tf.squeeze(output, axis=0), attention_weights
-    #
-    #         # 连接 predicted_id 与输出，作为解码器的输入传递到解码器。
-    #         output = tf.concat([output, predicted_id], axis=-1)
-    #
-    #     return tf.squeeze(output, axis=0), attention_weights
+    def evaluate(self):
+        self.train_loss.reset_states()
+        for (batch, (input, target)) in enumerate(self.test_dataset):
+
+            decoder_input = input[:, -1:, :]            # (batch_size, 1, vocab_size)
+            output = tf.expand_dims(decoder_input, 0)   # (batch_size, 1, vocab_size)
+
+            for i in range(self.max_output_length):
+                enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(
+                    input, output)
+                # predictions.shape == (batch_size, seq_len, feature_size)
+                predictions, attention_weights = self.transformer(input, output, False,
+                                                                     enc_padding_mask,
+                                                                     combined_mask,
+                                                                     dec_padding_mask)
+                output = predictions
+            loss_ = tf.reduce_mean(tf.keras.losses.MeanSquaredError(output, target))
+            self.train_loss(loss_)
+        print('Batch {} Loss {:.4f}'.format(batch + 1, self.train_loss.result()))
+
+    def test(self, input):
+        pass
+
+if __name__ == '__main__':
+    trainer = Trainer()
+    trainer.load_data()
+    trainer.train()

@@ -315,15 +315,20 @@ class StockTFRecordDataset(object):
                             continue
 
                         if inputData is None:
-                            inputData = np.expand_dims(stockData[currentStart:currentStart + 30], axis=0)
-                            targetData = np.expand_dims(stockData[currentStart+30:currentStart+37], axis=0)
+                            # input: 30 days
+                            inputData = np.expand_dims(stockData[currentStart:currentStart+self.inputLength], axis=0)
+                            # target: 37-1 days
+                            targetData = np.expand_dims(stockData[currentStart+self.inputLength-1:
+                                                        currentStart+self.inputLength+self.targetLength-1], axis=0)
+                                                        # start from the last of input sequence!
                         else:
                             inputData = np.concatenate([inputData,
-                                                             np.expand_dims(stockData[currentStart:currentStart + 30],
-                                                                            axis=0)], axis=0)
+                                                        np.expand_dims(stockData[currentStart:currentStart
+                                                                      +self.inputLength], axis=0)], axis=0)
                             targetData = np.concatenate([targetData,
-                                                             np.expand_dims(stockData[currentStart + 30:currentStart + 37],
-                                                                            axis=0)], axis=0)
+                                                         np.expand_dims(stockData[currentStart+self.inputLength-1:
+                                                         currentStart+self.inputLength+self.targetLength-1],
+                                                            axis=0)], axis=0)
                         currentStart += 30
                         label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
 
