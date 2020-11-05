@@ -3,14 +3,14 @@ from DecoderLayer import DecoderLayer
 from PositionalEncoding import PositionalEncoding
 
 class Decoder(tf.keras.layers.Layer):
-    def __init__(self, num_layers, d_model, num_heads, dff, target_vocab_size,
+    def __init__(self, num_layers, d_model, num_heads, dff, target_feature_size,
                  maximum_position_encoding, rate=0.1):
         super(Decoder, self).__init__()
 
         self.d_model = d_model
         self.num_layers = num_layers
 
-        self.embedding = tf.keras.layers.Embedding(target_vocab_size, d_model)
+        self.embedding = tf.keras.layers.Embedding(target_feature_size, d_model)
         self.positionEncoder = PositionalEncoding(maximum_position_encoding, self.d_model)
         self.pos_encoding = self.positionEncoder.get_positional_encoding()
 
