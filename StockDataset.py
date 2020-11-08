@@ -265,7 +265,6 @@ class StockTFRecordDataset(object):
                     example = tf.train.Example(features=tf.train.Features(feature=feature))
                     writer.write(example.SerializeToString())
 
-
     def createDataFiles(self):
         """
         @param trainval:
@@ -332,14 +331,13 @@ class StockTFRecordDataset(object):
                         currentStart += 30
                         label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
 
-                    break
-
             # normalize data
             if not os.path.exists("data/info.json"):
-                self.normalize(inputData, True)
+                inputData = self.normalize(inputData, True)
             else:
-                self.normalize(inputData)
-            self.normalize(targetData)
+                inputData = self.normalize(inputData)
+            targetData = self.normalize(targetData)
+
 
             # split train/test
             indices = [i for i in range(inputData.shape[0])]
