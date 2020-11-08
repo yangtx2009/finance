@@ -138,3 +138,5 @@ test.py
 
 password.txt
 /data/*
+/logs/*
+/checkpoints/*

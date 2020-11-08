@@ -9,8 +9,11 @@ class Encoder(tf.keras.layers.Layer):
 
         self.d_model = d_model
         self.num_layers = num_layers
+        self.input_feature_size = input_feature_size
 
-        self.embedding = tf.keras.layers.Embedding(input_feature_size, d_model)
+        # self.embedding = tf.keras.layers.Embedding(input_feature_size, d_model)
+        self.embedding = tf.keras.layers.Dense(d_model, input_shape=(input_feature_size,))
+
         self.positionEncoder = PositionalEncoding(maximum_position_encoding, self.d_model)
         self.pos_encoding = self.positionEncoder.get_positional_encoding()
 
@@ -23,7 +26,11 @@ class Encoder(tf.keras.layers.Layer):
         seq_len = tf.shape(x)[1]
 
         # 将嵌入和位置编码相加。
+        # print("encoder input", x.shape)
+        x = tf.reshape(x, shape=[-1, self.input_feature_size])
         x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
+        x = tf.reshape(x, shape=[-1, seq_len, self.d_model])
+
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
         x += self.pos_encoding[:, :seq_len, :]
 

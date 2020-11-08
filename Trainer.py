@@ -4,11 +4,14 @@ from CustomSchedule import CustomSchedule
 from StockTransformer import StockTransformer
 from MaskHandler import MaskHandler
 from time import time
+import datetime
+import os
+import subprocess
 
 class Trainer:
     def __init__(self):
         self.num_layers = 4
-        self.d_model = 128  # output dim of embedding
+        self.d_model = 32 #128  # output dim of embedding
         self.dff = 512
         self.num_heads = 8
 
@@ -25,6 +28,8 @@ class Trainer:
         self.optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
         self.train_loss = tf.keras.metrics.Mean(name='train_loss')
         self.train_error = tf.keras.losses.MeanSquaredError()   # reduction=tf.keras.losses.Reduction.SUM
+        self.test_loss = tf.keras.metrics.Mean(name='test_loss')
+        self.test_error = tf.keras.losses.MeanSquaredError()
 
         self.transformer = StockTransformer(self.num_layers, self.max_output_length, self.d_model, self.num_heads, self.dff,
                                   self.input_feature_size, self.target_feature_size,
@@ -40,6 +45,17 @@ class Trainer:
             ckpt.restore(self.ckpt_manager.latest_checkpoint)
             print('Latest checkpoint restored!!')
 
+        current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        root_dir = os.path.abspath('logs/'+current_time)
+        train_log_dir = root_dir + '/train'
+        test_log_dir = root_dir + '/test'
+        self.train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+        self.test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+        print("Launching tensorboard in logdir", 'tensorboard --logdir', os.path.abspath('logs'))
+        # cmd = ['tensorboard', '--logdir', root_dir]
+        # subprocess.Popen(cmd, stdout=subprocess.STDOUT)
+
     def parse_example(self, serial_exmp):
         features = {
             # 定义Feature结构，告诉解码器每个Feature的类型是什么
@@ -52,8 +68,6 @@ class Trainer:
         return input, target
 
     def load_data(self):
-        BUFFER_SIZE = 64
-
         train_dataset = tf.data.TFRecordDataset("data/train.tfrecords")
         train_dataset = train_dataset.map(self.parse_example)
         test_dataset = tf.data.TFRecordDataset("data/test.tfrecords")
@@ -62,10 +76,10 @@ class Trainer:
         # self.train_dataset = train_dataset.filter(filter_max_length)
         # 将数据集缓存到内存中以加快读取速度。
         train_dataset = train_dataset.cache()
-        train_dataset = train_dataset.shuffle(BUFFER_SIZE).batch(self.batch_size) # .padded_batch(self.batch_size) no need padding
+        train_dataset = train_dataset.shuffle(128).batch(self.batch_size) # .padded_batch(self.batch_size) no need padding
         self.train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-        self.test_dataset = test_dataset.batch(1)
+        self.test_dataset = test_dataset.batch(self.batch_size)   #
 
     def loss_function(self, real, pred):
         """
@@ -111,7 +125,6 @@ class Trainer:
 
         with tf.GradientTape() as tape:
             predictions, _ = self.transformer(inp, tar_inp, True, enc_padding_mask, combined_mask, dec_padding_mask)
-            print("predictions", predictions)   # (None, None, 1)
             loss = self.loss_function(tar_real, predictions)
 
         gradients = tape.gradient(loss, self.transformer.trainable_variables)
@@ -124,31 +137,39 @@ class Trainer:
             start = time()
 
             self.train_loss.reset_states()
-
             # inp -> portuguese, tar -> english
-            try:
-                for (batch, (input, target)) in enumerate(self.train_dataset):
-                    # print("input", input)
-                    self.train_step(input, target)
+            for (batch, (input, target)) in enumerate(self.train_dataset):
+                if input.shape[0] != self.batch_size:
+                    continue
 
-                    if batch % 50 == 0:
-                        print('Epoch {} Batch {} Loss {}'.format(
-                            epoch + 1, batch, self.train_loss.result()))
-            except BaseException:
-                print("Reached final batch. Continue ...")
+                self.train_step(input, target)
+
+                if batch % 100 == 0:
+                    print('Epoch {}: Batch {}/{} Train Loss {}'.format(
+                        epoch + 1, batch, len(list(self.train_dataset)), self.train_loss.result()))
 
             if (epoch + 1) % 5 == 0:
                 ckpt_save_path = self.ckpt_manager.save()
                 print('Saving checkpoint for epoch {} at {}'.format(epoch + 1, ckpt_save_path))
 
-            print('Epoch {} Loss {}'.format(epoch + 1, self.train_loss.result()))
+            with self.train_summary_writer.as_default():
+                tf.summary.scalar('loss', self.train_loss.result(), step=epoch)
+
+            print('Epoch {}: Train Loss {}'.format(epoch + 1, self.train_loss.result()))
             print('Time taken for 1 epoch: {} secs\n'.format(time() - start))
 
-    def evaluate(self):
-        self.train_loss.reset_states()
+            self.evaluate(epoch)
+
+    def evaluate(self, epoch):
+        self.test_loss.reset_states()
+        # try:
         for (batch, (input, target)) in enumerate(self.test_dataset):
-            decoder_input = input[:, -1:]            # (batch_size, 1, vocab_size)
-            # output = tf.expand_dims(decoder_input, 0)   # (batch_size, 1, vocab_size)
+            if input.shape[0] != self.batch_size:
+                    continue
+
+            # input = tf.expand_dims(input, -1)
+            decoder_input = input[:,-1:]            # (batch_size, 1, 1)
+            # output = tf.expand_dims(decoder_input, -1)   # (batch_size, 1, 1)
             output = decoder_input
 
             for i in range(self.max_output_length-1):
@@ -162,10 +183,20 @@ class Trainer:
                 predictions = predictions[:, -1:, 0]
                 output = tf.concat([output, predictions], axis=-1)
 
-            loss_ = tf.reduce_mean(self.train_error(output, target))
-            self.train_loss(loss_)
-            print('Batch {} Loss {}'.format(batch + 1, self.train_loss.result()))
-            print(output, target)
+            loss_ = tf.reduce_mean(self.test_error(output, target))
+            self.test_loss(loss_)
+            # print(output, target)
+
+            if batch % 100 == 0:
+                print('Epoch {}: Batch {}/{} Validation Loss {}'.format(epoch + 1, batch,
+                                                                    len(list(self.test_dataset)),
+                                                                    self.test_loss.result()))
+        # except BaseException:
+        #     print("Reached final batch. Continue ...")
+
+        print('Epcoh {}: Validation Loss {}'.format(epoch, self.test_loss.result()))
+        with self.test_summary_writer.as_default():
+            tf.summary.scalar('loss', self.test_loss.result(), step=epoch)
 
     def test(self, input):
         pass
@@ -173,5 +204,5 @@ class Trainer:
 if __name__ == '__main__':
     trainer = Trainer()
     trainer.load_data()
-    # trainer.train()
-    trainer.evaluate()
+    trainer.train()
+    # trainer.evaluate(0)

@@ -342,8 +342,8 @@ class StockTFRecordDataset(object):
             # split train/test
             indices = [i for i in range(inputData.shape[0])]
             random.shuffle(indices)
-            trainIndices = indices[:int(len(indices)*0.8)]
-            testIndices = indices[int(len(indices)*0.8):]
+            trainIndices = indices[:int(len(indices)*0.9)]
+            testIndices = indices[int(len(indices)*0.9):]
 
             self.trainInputData = inputData[trainIndices, :]
             self.trainTargetData = targetData[trainIndices, :]
