@@ -162,7 +162,6 @@ class Trainer:
 
     def evaluate(self, epoch):
         self.test_loss.reset_states()
-        # try:
         for (batch, (input, target)) in enumerate(self.test_dataset):
             if input.shape[0] != self.batch_size:
                     continue

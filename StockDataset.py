@@ -16,6 +16,8 @@ import numpy as np
 import random
 from sklearn.preprocessing import MinMaxScaler
 import json
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 
 # tfds.builder
 class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
@@ -395,6 +397,72 @@ class StockTFRecordDataset(object):
 
         return data * (self.max - self.min) + self.min
 
+class StockSampler:
+    def __init__(self, inputLength=30, targetLength=7):
+        self.inputLength = inputLength
+        self.targetLength = targetLength
+
+
+    def get_single_random_sample(self, show=True):
+        industryName = random.sample(tf.io.gfile.listdir("industries"), 1)[0]
+        print(industryName)
+
+        chineseName = os.path.splitext(industryName)[0]
+
+        localData = pd.read_csv(os.path.join("industries", industryName))
+        localData = localData.sort_values(by=['times'])
+        localData.set_index("times", inplace=True)
+
+        stockName = random.sample(localData.columns.to_list(),1)[0]
+        stockData = localData[stockName].to_numpy(dtype=float)
+        stockData[np.isnan(stockData)] = 0
+
+        print("stockData", np.shape(stockData))
+        if show:
+            plt.figure()
+            plt.plot(np.arange(0, np.shape(stockData)[0]), stockData)
+            font = fm.FontProperties(fname='c:\\windows\\fonts\\simsun.ttc')
+            plt.title(stockName, fontproperties=font, fontsize='large')
+            plt.show()
+
+        # currentStart = 0
+        # while (currentStart <= (stockData.size - self.inputLength - self.targetLength)):
+        #     if np.count_nonzero(stockData[currentStart:currentStart + 30]) == 0:
+        #         currentStart += 30
+        #         continue
+        #
+        #     if inputData is None:
+        #         # input: 30 days
+        #         inputData = np.expand_dims(stockData[currentStart:currentStart + self.inputLength], axis=0)
+        #         # target: 37-1 days
+        #         targetData = np.expand_dims(stockData[currentStart + self.inputLength - 1:
+        #                                               currentStart + self.inputLength + self.targetLength - 1],
+        #                                     axis=0)
+        #         # start from the last of input sequence!
+        #     else:
+        #         inputData = np.concatenate([inputData,
+        #                                     np.expand_dims(stockData[currentStart:currentStart
+        #                                                                           + self.inputLength], axis=0)],
+        #                                    axis=0)
+        #         targetData = np.concatenate([targetData,
+        #                                      np.expand_dims(stockData[currentStart + self.inputLength - 1:
+        #                                                               currentStart + self.inputLength + self.targetLength - 1],
+        #                                                     axis=0)], axis=0)
+        #     currentStart += 30
+        #     label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
+
+    def normalize(self, data):
+        if os.path.exists("data/info.json"):
+            with open("data/info.json", 'r') as outfile:
+                json_data = json.load(outfile)
+                min = json_data['min']
+                max = json_data['max']
+                return (data - min) / (max - min)
+        else:
+            raise Warning("Cannot find info.json")
+
 if __name__ == '__main__':
     # stockDataset = StockBuilderDataset()
-    stockDataset = StockTFRecordDataset()
+    # stockDataset = StockTFRecordDataset()
+    stockSampler = StockSampler()
+    stockSampler.get_single_random_sample()

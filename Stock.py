@@ -247,7 +247,11 @@ class Stock(ABC):
         for idx, (name, data) in enumerate(self.averaged.items()):
             averaged_industry = pd.DataFrame(columns=["times", name])
             averaged_industry["times"] = data["times"].tolist()
-            temp = copy.deepcopy(data).drop("times", axis=1).mean(axis=1)
+            data = data.fillna(0)
+
+            temp = copy.deepcopy(data).drop("times", axis=1)
+            nonZeroNum = temp.gt(0).sum(axis=1)
+            temp = temp.sum(axis=1)/nonZeroNum
             averaged_industry[name] = temp
 
             if joined is None:
@@ -378,7 +382,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.times = [value for (key, value) in sorted(self.times.items())]
         print("times", self.times)
-
 
         for key, value in temp.items():
             self.dataDict[key] = [value1 for (key1, value1) in sorted(value.items())]

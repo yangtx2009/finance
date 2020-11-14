@@ -56,6 +56,7 @@ class LoadThread(threading.Thread):
                     merged = pd.merge(merged, newData, on="times", how='outer')
 
             merged["times"] = ["{}.{}.{}".format(str(t)[:4], str(t)[4:6], str(t)[6:8]) for t in merged["times"].tolist()]
+            merged = merged.sort_values(by=['times'])
             merged.to_csv(filename, index=False)
             self.stock.averaged[name] = merged
 
@@ -89,7 +90,7 @@ class LoadThread(threading.Thread):
         # print("URL:", url)
         l_jsonData = requests.get(url).json()
         # print("stock", l_jsonData["name"])
-        data = pd.DataFrame(data={"closes": l_jsonData["closes"], "times": l_jsonData["times"]})
+        data = pd.DataFrame(data={"times": l_jsonData["times"], "closes": l_jsonData["closes"]})
 
         if p_draw:
             data.plot(x="times", y="closes", figsize=(10, 4), grid=True)
