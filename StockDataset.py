@@ -141,6 +141,7 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
                     # process data
                     stockData = localData[stockName].to_numpy(dtype=float)
                     stockData[np.isnan(stockData)] = 0
+                    stockData = stockData[stockData!=0]     # remove all zero element
 
                     currentStart = 0
                     while (currentStart <= (stockData.size - self.inputLength - self.targetLength)):
@@ -416,6 +417,7 @@ class StockSampler:
         stockName = random.sample(localData.columns.to_list(),1)[0]
         stockData = localData[stockName].to_numpy(dtype=float)
         stockData[np.isnan(stockData)] = 0
+        stockData = stockData[stockData != 0]
 
         print("stockData", np.shape(stockData))
         if show:
@@ -463,6 +465,6 @@ class StockSampler:
 
 if __name__ == '__main__':
     # stockDataset = StockBuilderDataset()
-    # stockDataset = StockTFRecordDataset()
-    stockSampler = StockSampler()
-    stockSampler.get_single_random_sample()
+    stockDataset = StockTFRecordDataset()
+    # stockSampler = StockSampler()
+    # stockSampler.get_single_random_sample()

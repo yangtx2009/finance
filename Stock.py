@@ -23,11 +23,8 @@ pd.set_option('display.max_columns', 20)
 import copy
 from sklearn import preprocessing
 from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5 import QtWidgets, QtCore, QtGui
-from pyqtgraph import PlotWidget, plot
 import pyqtgraph as pg
 import random
-import math
 import tqdm
 
 from WebScraper import LoadFinishCondition, LoadThread
@@ -232,35 +229,38 @@ class Stock(ABC):
         if not os.path.exists("industries"):
             os.makedirs("industries")
 
-        industryNames = list(industries.groups.keys())
-        grouped = self.chunkIt(industryNames, threadNum)
-        threads = list()
-        for n in range(threadNum):
-            threads.append(LoadThread(n, self, grouped[n]))
-            threads[n].start()
+        if (os.path.exists("joined.csv")):
+            joined = pd.read_csv("joined.csv")
+        else:
+            industryNames = list(industries.groups.keys())
+            grouped = self.chunkIt(industryNames, threadNum)
+            threads = list()
+            for n in range(threadNum):
+                threads.append(LoadThread(n, self, grouped[n]))
+                threads[n].start()
 
-        print("Waiting for reading stocks ...")
-        for n in range(threadNum):
-            threads[n].join()
+            print("Waiting for reading stocks ...")
+            for n in range(threadNum):
+                threads[n].join()
 
-        joined = None
-        for idx, (name, data) in enumerate(self.averaged.items()):
-            averaged_industry = pd.DataFrame(columns=["times", name])
-            averaged_industry["times"] = data["times"].tolist()
-            data = data.fillna(0)
+            joined = None
+            for idx, (name, data) in enumerate(self.averaged.items()):
+                averaged_industry = pd.DataFrame(columns=["times", name])
+                averaged_industry["times"] = data["times"].tolist()
+                data = data.fillna(0)
 
-            temp = copy.deepcopy(data).drop("times", axis=1)
-            nonZeroNum = temp.gt(0).sum(axis=1)
-            temp = temp.sum(axis=1)/nonZeroNum
-            averaged_industry[name] = temp
+                temp = copy.deepcopy(data).drop("times", axis=1)
+                nonZeroNum = temp.gt(0).sum(axis=1)
+                temp = temp.sum(axis=1)/nonZeroNum
+                averaged_industry[name] = temp
 
-            if joined is None:
-                joined = averaged_industry
-            else:
-                joined = pd.merge(joined, averaged_industry, on="times", how='outer')
+                if joined is None:
+                    joined = averaged_industry
+                else:
+                    joined = pd.merge(joined, averaged_industry, on="times", how='outer')
 
-        joined = joined.sort_values(by="times")
-        joined.to_csv("joined.csv")
+            joined = joined.sort_values(by="times")
+            joined.to_csv("joined.csv",index=False)
 
         # fig, ax = plt.subplots()
         # meanData = joined.drop("times", axis=1)
@@ -306,7 +306,6 @@ class Stock(ABC):
             print("Cannot find {} in industries directory".format(filename))
             return None
 
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -315,6 +314,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.stock = Stock()
         self.colorMap = None
+        self.lastPen = None
+        self.lastItem = None
 
         self.stock.calculateIndustryPerformance()
 
@@ -349,11 +350,8 @@ class MainWindow(QtWidgets.QMainWindow):
         temperature = [30,32,34,32,33,31,29,32,35,45]
 
         self.graphWidget.setBackground('w')
-
-        # print(type(self.graphWidget.plot(hour, temperature)))
+        self.graphWidget.scene().sigMouseClicked.connect(self.curveClicked)
         self.curves = {}
-
-        # self.refreshList()
 
     def setYRange(self, range):
         self.enableAutoRange(axis='y')
@@ -398,7 +396,6 @@ class MainWindow(QtWidgets.QMainWindow):
             color = QtGui.QColor()
             color.setHsv(*self.colorMap[i])
             item.setBackground(QtGui.QBrush(color))
-
         self.checkBoxListWidget.itemChanged.connect(self.updatePlot)
         self.updatePlot()
 
@@ -416,13 +413,36 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 color = QtGui.QColor()
                 color.setHsv(*self.colorMap[i])
-                self.curves[text] = self.graphWidget.plot(np.arange(num),
-                                                         self.dataDict[text], pen=pg.mkPen(color=color, width=2))
+                item = self.graphWidget.plot(np.arange(num), self.dataDict[text], pen=pg.mkPen(color=color, width=1))
+                self.curves[text] = item
+                print(text, self.curves[text].curve)
                 self.curves[text].setVisible(checked)
 
         ax = self.graphWidget.getAxis('bottom')
         ticks = [list(zip(range(0, num, 10), [self.times[i] for i in range(0, num, 10)]))]
         ax.setTicks(ticks)
+
+    def curveClicked2(self):
+        print("curveClicked2")
+
+    def curveClicked(self, ev):
+        print("clicked")
+        if self.lastItem is not None:
+            self.lastItem.setPen(self.lastPen)
+
+        # print(self.graphWidget.scene().itemsNearEvent(ev))
+        for item in self.graphWidget.scene().itemsNearEvent(ev):
+            if (isinstance(item, pg.PlotCurveItem)):
+                self.lastPen = item.opts["pen"]
+                self.lastItem = item
+                item.setPen(pg.mkPen(item.opts["pen"].color(), width=2, style=QtCore.Qt.DashLine))
+
+                # name = list(self.curves.keys())[list(self.curves.values()).index(item)]
+                for index, (name, curve) in enumerate(self.curves.items()):
+                    if curve.curve == item:
+                        print("selected curve", name)
+                        self.checkBoxListWidget.setCurrentRow(index)
+                break
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
