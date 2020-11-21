@@ -10,7 +10,6 @@ import requests
 import matplotlib.pyplot as plt
 import sys
 
-
 class LoadThread(threading.Thread):
     def __init__(self, id, stock, keyList):
         """
@@ -22,6 +21,7 @@ class LoadThread(threading.Thread):
         self.id = id
         self.stock = stock
         self.keyList = keyList
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         # print("Created thread {} ...".format(self.id))
 
     def run(self):
@@ -31,7 +31,7 @@ class LoadThread(threading.Thread):
             if not (name in self.keyList):
                 continue
             # print("------- {} -------".format(name))
-            filename = os.path.join("industries", "{}.csv".format(name))
+            filename = os.path.join(self.localDir, "industries", "{}.csv".format(name))
             if os.path.exists(filename):
                 d = datetime.fromtimestamp(os.path.getmtime(filename))
                 now = datetime.now()

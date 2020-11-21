@@ -1,8 +1,8 @@
 import tensorflow as tf
 
-from CustomSchedule import CustomSchedule
-from StockTransformer import StockTransformer
-from MaskHandler import MaskHandler
+from Analyser.MachineLearning.CustomSchedule import CustomSchedule
+from Analyser.MachineLearning.StockTransformer import StockTransformer
+from Analyser.MachineLearning.MaskHandler import MaskHandler
 from time import time
 import datetime
 import os
@@ -10,6 +10,7 @@ import subprocess
 
 class Trainer:
     def __init__(self):
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.num_layers = 4
         self.d_model = 32 #128  # output dim of embedding
         self.dff = 512
@@ -37,7 +38,7 @@ class Trainer:
                                   pe_target=self.target_feature_size,
                                   rate=self.dropout_rate)
 
-        self.checkpoint_path = "./checkpoints/train"
+        self.checkpoint_path = os.path.join(self.localDir, "checkpoints", "train")
         ckpt = tf.train.Checkpoint(transformer=self.transformer,
                                    optimizer=self.optimizer)
         self.ckpt_manager = tf.train.CheckpointManager(ckpt, self.checkpoint_path, max_to_keep=5)
@@ -46,13 +47,13 @@ class Trainer:
             print('Latest checkpoint restored!!')
 
         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        root_dir = os.path.abspath('logs/'+current_time)
+        root_dir = os.path.join(self.localDir, "logs", current_time)
         train_log_dir = root_dir + '/train'
         test_log_dir = root_dir + '/test'
         self.train_summary_writer = tf.summary.create_file_writer(train_log_dir)
         self.test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
-        print("Launching tensorboard in logdir", 'tensorboard --logdir', os.path.abspath('logs'))
+        print("Launching tensorboard in logdir", 'tensorboard --logdir', os.path.join(self.localDir, "logs"))
         # cmd = ['tensorboard', '--logdir', root_dir]
         # subprocess.Popen(cmd, stdout=subprocess.STDOUT)
 
@@ -68,9 +69,9 @@ class Trainer:
         return input, target
 
     def load_data(self):
-        train_dataset = tf.data.TFRecordDataset("data/train.tfrecords")
+        train_dataset = tf.data.TFRecordDataset(os.path.join(self.localDir, "data", "train.tfrecords"))
         train_dataset = train_dataset.map(self.parse_example)
-        test_dataset = tf.data.TFRecordDataset("data/test.tfrecords")
+        test_dataset = tf.data.TFRecordDataset(os.path.join(self.localDir, "data", "test.tfrecords"))
         test_dataset = test_dataset.map(self.parse_example)
 
         # self.train_dataset = train_dataset.filter(filter_max_length)

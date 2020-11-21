@@ -10,11 +10,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import numpy as np
 import pandas as pd
+import os
 
 class DatabaseClient:
     def __init__(self):
         self._username = ""
         self._password = ""
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.readAuthority()
 
         self.engine = create_engine('mysql+pymysql://{}:{}@localhost:3306/finance'.format(self._username, self._password))
@@ -30,7 +32,7 @@ class DatabaseClient:
         # self.mycursor.execute("USE finance")
 
     def readAuthority(self):
-        with open("password.txt", 'r') as file:
+        with open(os.path.join(self.localDir, "password.txt"), 'r') as file:
             lines = file.readlines()
             if len(lines) != 2:
                 print("Alert: cannot read username and password!")

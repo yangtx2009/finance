@@ -8,16 +8,15 @@
 import tensorflow_datasets.public_api as tfds
 import tensorflow as tf
 import os
-import sys
-from glob import glob
-from googletrans import Translator
 import pandas as pd
 import numpy as np
 import random
-from sklearn.preprocessing import MinMaxScaler
 import json
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
+
+from Data.Stocks import STOCK_DIR
+
 
 # tfds.builder
 class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
@@ -52,8 +51,8 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
                          "Target is the next 7-days prices."),
             # tfds.features.FeatureConnectors
             features=tfds.features.FeaturesDict({
-                "input": tfds.features.Tensor(shape=(self.inputLength), dtype=tf.float32),
-                "target": tfds.features.Tensor(shape=(self.targetLength), dtype=tf.float32)
+                "input": tfds.features.Tensor(shape=self.inputLength, dtype=tf.float32),
+                "target": tfds.features.Tensor(shape=self.targetLength, dtype=tf.float32)
             }),
             # 如果特征中有一个通用的（输入，目标）元组，
             # 请在此处指定它们。它们将会在
@@ -87,11 +86,11 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
     def _generate_examples(self, dataset_type):
         # 从数据集中产生样本
         # 对应SplitGenerator中的参数
-        if (dataset_type == "train"):
+        if dataset_type == "train":
             for i in range(self.trainInputData.shape[0]):
                 yield {
-                    "input": self.trainInputData[i,:],
-                    "target": self.trainTargetData[i,:]
+                    "input": self.trainInputData[i, :],
+                    "target": self.trainTargetData[i, :]
                 }
         else:
             for i in range(self.testInputData.shape[0]):
@@ -102,7 +101,6 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
 
     def createDataFiles(self):
         """
-        @param trainval:
         inputData: [:, inputLength]
         targetData: [:, targetLength]
         label: [:, [industry, name]]
@@ -110,26 +108,26 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
         """
 
         if os.path.exists("data/TrainInputData.npy"):
-            self.trainInputData = np.load("data/TrainInputData.npy")
-            self.trainTargetData = np.load("data/TrainTargetData.npy")
-            self.trainLabel = pd.read_csv('data/TrainLabel.csv')
+            self.trainInputData = np.load(os.path.join(self.localDir, "data", "TrainInputData.npy"))
+            self.trainTargetData = np.load(os.path.join(self.localDir, "data", "TrainTargetData.npy"))
+            self.trainLabel = pd.read_csv(os.path.join(self.localDir, "data", "TrainLabel.csv"))
 
-            self.testInputData = np.load("data/TestInputData.npy")
-            self.testTargetData = np.load("data/TestTargetData.npy")
-            self.testLabel = pd.read_csv('data/TestLabel.csv')
+            self.testInputData = np.load(os.path.join(self.localDir, "data", "TestInputData.npy"))
+            self.testTargetData = np.load(os.path.join(self.localDir, "data", "TestTargetData.npy"))
+            self.testLabel = pd.read_csv(os.path.join(self.localDir, "data", "TestLabel.csv"))
         else:
             # translator = Translator()
             inputData = None
             targetData = None
             label = pd.DataFrame(columns=["industry", "stock"])
 
-            for industryName in tf.io.gfile.listdir("industries"):
+            for industryName in tf.io.gfile.listdir(os.path.join(STOCK_DIR, "industries")):
                 chineseName = os.path.splitext(industryName)[0]
                 # print("chineseName", chineseName)
                 # engName = translator.translate(chineseName).text
                 # print("englishName", engName, type(engName))
 
-                localData = pd.read_csv(os.path.join("industries", industryName))
+                localData = pd.read_csv(os.path.join(STOCK_DIR, "industries", industryName))
                 localData.set_index("times", inplace=True)
 
                 stockNames = localData.columns.to_list()
@@ -141,31 +139,31 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
                     # process data
                     stockData = localData[stockName].to_numpy(dtype=float)
                     stockData[np.isnan(stockData)] = 0
-                    stockData = stockData[stockData!=0]     # remove all zero element
+                    stockData = stockData[stockData != 0]  # remove all zero element
 
                     currentStart = 0
-                    while (currentStart <= (stockData.size - self.inputLength - self.targetLength)):
+                    while currentStart <= (stockData.size - self.inputLength - self.targetLength):
                         if np.count_nonzero(stockData[currentStart:currentStart + 30]) == 0:
                             currentStart += 30
                             continue
 
                         if inputData is None:
                             inputData = np.expand_dims(stockData[currentStart:currentStart + 30], axis=0)
-                            targetData = np.expand_dims(stockData[currentStart+30:currentStart+37], axis=0)
+                            targetData = np.expand_dims(stockData[currentStart + 30:currentStart + 37], axis=0)
                         else:
                             inputData = np.concatenate([inputData,
-                                                             np.expand_dims(stockData[currentStart:currentStart + 30],
-                                                                            axis=0)], axis=0)
+                                                        np.expand_dims(stockData[currentStart:currentStart + 30],
+                                                                       axis=0)], axis=0)
                             targetData = np.concatenate([targetData,
-                                                             np.expand_dims(stockData[currentStart + 30:currentStart + 37],
-                                                                            axis=0)], axis=0)
+                                                         np.expand_dims(stockData[currentStart + 30:currentStart + 37],
+                                                                        axis=0)], axis=0)
                         currentStart += 30
                         label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
 
                     break
 
             # normalize data
-            if not os.path.exists("data/info.json"):
+            if not os.path.exists(os.path.join(self.localDir, "data", "info.json")):
                 self.normalize(inputData, True)
             else:
                 self.normalize(inputData)
@@ -174,39 +172,39 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
             # split train/test
             indices = [i for i in range(inputData.shape[0])]
             random.shuffle(indices)
-            trainIndices = indices[:int(len(indices)*0.8)]
-            testIndices = indices[int(len(indices)*0.8):]
+            trainIndices = indices[:int(len(indices) * 0.8)]
+            testIndices = indices[int(len(indices) * 0.8):]
 
             self.trainInputData = inputData[trainIndices, :]
             self.trainTargetData = targetData[trainIndices, :]
-            self.trainLabel = label.iloc[trainIndices,:]
+            self.trainLabel = label.iloc[trainIndices, :]
 
             self.testInputData = inputData[testIndices, :]
             self.testTargetData = targetData[testIndices, :]
-            self.testLabel = label.iloc[testIndices,:]
+            self.testLabel = label.iloc[testIndices, :]
 
             print(self.trainLabel)
-            np.save("data/TrainInputData.npy", self.trainInputData)
-            np.save("data/TrainTargetData.npy", self.trainTargetData)
-            self.trainLabel.to_csv('data/TrainLabel.csv')
+            np.save(os.path.join(self.localDir, "data", "TrainInputData.npy"), self.trainInputData)
+            np.save(os.path.join(self.localDir, "data", "TrainTargetData.npy"), self.trainTargetData)
+            self.trainLabel.to_csv(os.path.join(self.localDir, "data", "TrainLabel.csv"))
 
-            np.save("data/TestInputData.npy", self.testInputData)
-            np.save("data/TestTargetData.npy", self.testTargetData)
-            self.testLabel.to_csv('data/TestLabel.csv')
+            np.save(os.path.join(self.localDir, "data", "TestInputData.npy"), self.testInputData)
+            np.save(os.path.join(self.localDir, "data", "TestTargetData.npy"), self.testTargetData)
+            self.testLabel.to_csv(os.path.join(self.localDir, "data", "TestLabel.csv"))
 
     def normalize(self, data, update=True):
         if update:
             self.max = np.max(data)
             self.min = np.min(data)
 
-            json_data = {}
+            json_data = dict()
             json_data['min'] = self.min
             json_data['max'] = self.max
-            with open("data/info.json", 'w') as outfile:
+            with open(os.path.join(self.localDir, "data", "info.json"), 'w') as outfile:
                 json.dump(json_data, outfile)
         elif self.min is None or self.max is None:
-            if os.path.exists("data/info.json"):
-                with open("data/info.json", 'r') as outfile:
+            if os.path.exists(os.path.join(self.localDir, "data", "info.json")):
+                with open(os.path.join(self.localDir, "data", "info.json"), 'r') as outfile:
                     json_data = json.load(outfile)
                     self.min = json_data['min']
                     self.max = json_data['max']
@@ -220,15 +218,17 @@ class StockBuilderDataset(tfds.core.GeneratorBasedBuilder):
 
     def scale(self, data):
         if self.min is None or self.max is None:
-            with open("data/info.json", 'r') as outfile:
+            with open(os.path.join(self.localDir, "data", "info.json"), 'r') as outfile:
                 data = json.load(outfile)
                 self.min = data['min']
                 self.max = data['max']
 
         return data * (self.max - self.min) + self.min
 
+
 class StockTFRecordDataset(object):
     def __init__(self, inputLength=30, targetLength=7):
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.inputLength = inputLength
         self.targetLength = targetLength
 
@@ -245,8 +245,8 @@ class StockTFRecordDataset(object):
         self.createTFRecord()
 
     def createTFRecord(self):
-        if not os.path.exists("data/train.tfrecords"):
-            with tf.io.TFRecordWriter("data/train.tfrecords") as writer:
+        if not os.path.exists(os.path.join(self.localDir, "data", "train.tfrecords")):
+            with tf.io.TFRecordWriter(os.path.join(self.localDir, "data", "train.tfrecords")) as writer:
                 for i in range(self.trainInputData.shape[0]):
                     feature = {
                         "input": tf.train.Feature(
@@ -257,7 +257,7 @@ class StockTFRecordDataset(object):
                     example = tf.train.Example(features=tf.train.Features(feature=feature))
                     writer.write(example.SerializeToString())
 
-            with tf.io.TFRecordWriter("data/test.tfrecords") as writer:
+            with tf.io.TFRecordWriter(os.path.join(self.localDir, "data", "test.tfrecords")) as writer:
                 for i in range(self.testInputData.shape[0]):
                     feature = {
                         "input": tf.train.Feature(
@@ -270,34 +270,33 @@ class StockTFRecordDataset(object):
 
     def createDataFiles(self):
         """
-        @param trainval:
         inputData: [:, inputLength]
         targetData: [:, targetLength]
         label: [:, [industry, name]]
         @return:
         """
 
-        if os.path.exists("data/TrainInputData.npy"):
-            self.trainInputData = np.load("data/TrainInputData.npy")
-            self.trainTargetData = np.load("data/TrainTargetData.npy")
-            self.trainLabel = pd.read_csv('data/TrainLabel.csv')
+        if os.path.exists(os.path.join(self.localDir, "data", "TrainInputData.npy")):
+            self.trainInputData = np.load(os.path.join(self.localDir, "data", "TrainInputData.npy"))
+            self.trainTargetData = np.load(os.path.join(self.localDir, "data", "TrainTargetData.npy"))
+            self.trainLabel = pd.read_csv(os.path.join(self.localDir, "data", "TrainLabel.csv"))
 
-            self.testInputData = np.load("data/TestInputData.npy")
-            self.testTargetData = np.load("data/TestTargetData.npy")
-            self.testLabel = pd.read_csv('data/TestLabel.csv')
+            self.testInputData = np.load(os.path.join(self.localDir, "data", "TestInputData.npy"))
+            self.testTargetData = np.load(os.path.join(self.localDir, "data", "TestTargetData.npy"))
+            self.testLabel = pd.read_csv(os.path.join(self.localDir, "data", "TestLabel.csv"))
         else:
             # translator = Translator()
             inputData = None
             targetData = None
             label = pd.DataFrame(columns=["industry", "stock"])
 
-            for industryName in tf.io.gfile.listdir("industries"):
+            for industryName in tf.io.gfile.listdir(os.path.join(STOCK_DIR, "industries")):
                 chineseName = os.path.splitext(industryName)[0]
                 # print("chineseName", chineseName)
                 # engName = translator.translate(chineseName).text
                 # print("englishName", engName, type(engName))
 
-                localData = pd.read_csv(os.path.join("industries", industryName))
+                localData = pd.read_csv(os.path.join(STOCK_DIR, "industries", industryName))
                 localData.set_index("times", inplace=True)
 
                 stockNames = localData.columns.to_list()
@@ -309,75 +308,77 @@ class StockTFRecordDataset(object):
                     # process data
                     stockData = localData[stockName].to_numpy(dtype=float)
                     stockData[np.isnan(stockData)] = 0
+                    stockData = stockData[stockData > 0]
 
                     currentStart = 0
-                    while (currentStart <= (stockData.size - self.inputLength - self.targetLength)):
+                    while currentStart <= (stockData.size - self.inputLength - self.targetLength):
                         if np.count_nonzero(stockData[currentStart:currentStart + 30]) == 0:
                             currentStart += 30
                             continue
 
                         if inputData is None:
                             # input: 30 days
-                            inputData = np.expand_dims(stockData[currentStart:currentStart+self.inputLength], axis=0)
+                            inputData = np.expand_dims(stockData[currentStart:currentStart + self.inputLength], axis=0)
                             # target: 37-1 days
-                            targetData = np.expand_dims(stockData[currentStart+self.inputLength-1:
-                                                        currentStart+self.inputLength+self.targetLength-1], axis=0)
-                                                        # start from the last of input sequence!
+                            targetData = np.expand_dims(stockData[currentStart + self.inputLength - 1:
+                                                                  currentStart + self.inputLength + self.targetLength - 1],
+                                                        axis=0)
+                            # start from the last of input sequence!
                         else:
                             inputData = np.concatenate([inputData,
-                                                        np.expand_dims(stockData[currentStart:currentStart
-                                                                      +self.inputLength], axis=0)], axis=0)
-                            targetData = np.concatenate([targetData,
-                                                         np.expand_dims(stockData[currentStart+self.inputLength-1:
-                                                         currentStart+self.inputLength+self.targetLength-1],
+                                                        np.expand_dims(
+                                                            stockData[currentStart:currentStart + self.inputLength],
                                                             axis=0)], axis=0)
+                            targetData = np.concatenate([targetData,
+                                                         np.expand_dims(stockData[currentStart + self.inputLength - 1:
+                                                                                  currentStart + self.inputLength + self.targetLength - 1],
+                                                                        axis=0)], axis=0)
                         currentStart += 30
                         label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
 
             # normalize data
-            if not os.path.exists("data/info.json"):
+            if not os.path.exists(os.path.join(self.localDir, "data", "info.json")):
                 inputData = self.normalize(inputData, True)
             else:
                 inputData = self.normalize(inputData)
             targetData = self.normalize(targetData)
 
-
             # split train/test
             indices = [i for i in range(inputData.shape[0])]
             random.shuffle(indices)
-            trainIndices = indices[:int(len(indices)*0.9)]
-            testIndices = indices[int(len(indices)*0.9):]
+            trainIndices = indices[:int(len(indices) * 0.9)]
+            testIndices = indices[int(len(indices) * 0.9):]
 
             self.trainInputData = inputData[trainIndices, :]
             self.trainTargetData = targetData[trainIndices, :]
-            self.trainLabel = label.iloc[trainIndices,:]
+            self.trainLabel = label.iloc[trainIndices, :]
 
             self.testInputData = inputData[testIndices, :]
             self.testTargetData = targetData[testIndices, :]
-            self.testLabel = label.iloc[testIndices,:]
+            self.testLabel = label.iloc[testIndices, :]
 
             print(self.trainLabel)
-            np.save("data/TrainInputData.npy", self.trainInputData)
-            np.save("data/TrainTargetData.npy", self.trainTargetData)
-            self.trainLabel.to_csv('data/TrainLabel.csv')
+            np.save(os.path.join(self.localDir, "data", "TrainInputData.npy"), self.trainInputData)
+            np.save(os.path.join(self.localDir, "data", "TrainTargetData.npy"), self.trainTargetData)
+            self.trainLabel.to_csv(os.path.join(self.localDir, "data", "TrainLabel.csv"))
 
-            np.save("data/TestInputData.npy", self.testInputData)
-            np.save("data/TestTargetData.npy", self.testTargetData)
-            self.testLabel.to_csv('data/TestLabel.csv')
+            np.save(os.path.join(self.localDir, "data", "TestInputData.npy"), self.testInputData)
+            np.save(os.path.join(self.localDir, "data", "TestTargetData.npy"), self.testTargetData)
+            self.testLabel.to_csv(os.path.join(self.localDir, "data", "TestLabel.csv"))
 
     def normalize(self, data, update=True):
         if update:
             self.max = np.max(data)
             self.min = np.min(data)
 
-            json_data = {}
+            json_data = dict()
             json_data['min'] = self.min
             json_data['max'] = self.max
-            with open("data/info.json", 'w') as outfile:
+            with open(os.path.join(self.localDir, "data", "info.json"), 'w') as outfile:
                 json.dump(json_data, outfile)
         elif self.min is None or self.max is None:
-            if os.path.exists("data/info.json"):
-                with open("data/info.json", 'r') as outfile:
+            if os.path.exists(os.path.join(self.localDir, "data", "info.json")):
+                with open(os.path.join(self.localDir, "data", "info.json"), 'r') as outfile:
                     json_data = json.load(outfile)
                     self.min = json_data['min']
                     self.max = json_data['max']
@@ -391,30 +392,31 @@ class StockTFRecordDataset(object):
 
     def scale(self, data):
         if self.min is None or self.max is None:
-            with open("data/info.json", 'r') as outfile:
+            with open(os.path.join(self.localDir, "data", "info.json"), 'r') as outfile:
                 data = json.load(outfile)
                 self.min = data['min']
                 self.max = data['max']
 
         return data * (self.max - self.min) + self.min
 
+
 class StockSampler:
     def __init__(self, inputLength=30, targetLength=7):
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.inputLength = inputLength
         self.targetLength = targetLength
 
-
     def get_single_random_sample(self, show=True):
-        industryName = random.sample(tf.io.gfile.listdir("industries"), 1)[0]
+        industryName = random.sample(tf.io.gfile.listdir(os.path.join(STOCK_DIR, "industries")), 1)[0]
         print(industryName)
 
         chineseName = os.path.splitext(industryName)[0]
 
-        localData = pd.read_csv(os.path.join("industries", industryName))
+        localData = pd.read_csv(os.path.join(STOCK_DIR, "industries", industryName))
         localData = localData.sort_values(by=['times'])
         localData.set_index("times", inplace=True)
 
-        stockName = random.sample(localData.columns.to_list(),1)[0]
+        stockName = random.sample(localData.columns.to_list(), 1)[0]
         stockData = localData[stockName].to_numpy(dtype=float)
         stockData[np.isnan(stockData)] = 0
         stockData = stockData[stockData != 0]
@@ -454,8 +456,8 @@ class StockSampler:
         #     label = label.append({"industry": chineseName, "stock": stockName}, ignore_index=True)
 
     def normalize(self, data):
-        if os.path.exists("data/info.json"):
-            with open("data/info.json", 'r') as outfile:
+        if os.path.exists(os.path.join(self.localDir, "data", "info.json")):
+            with open(os.path.join(self.localDir, "data", "info.json"), 'r') as outfile:
                 json_data = json.load(outfile)
                 min = json_data['min']
                 max = json_data['max']
@@ -463,8 +465,11 @@ class StockSampler:
         else:
             raise Warning("Cannot find info.json")
 
+
 if __name__ == '__main__':
     # stockDataset = StockBuilderDataset()
+
     stockDataset = StockTFRecordDataset()
+
     # stockSampler = StockSampler()
     # stockSampler.get_single_random_sample()

@@ -133,10 +133,17 @@ dmypy.json
 bin/*
 .idea
 .idea/*
-industries/*
+
 test.py
 
-password.txt
-/data/*
-/logs/*
-/checkpoints/*
+Analyser/MachineLearning/logs/*
+Analyser/MachineLearning/checkpoints/*
+Analyser/MachineLearning/data/*
+
+/Data/password.txt
+/Data/Stocks/industries/*
+/Data/Stocks/*.csv
+
+test
+geckodriver.log
+ghostdriver.log

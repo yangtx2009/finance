@@ -27,13 +27,14 @@ import pyqtgraph as pg
 import random
 import tqdm
 
-from WebScraper import LoadFinishCondition, LoadThread
-from SqlClient import DatabaseClient
+from Data.Stocks.Loader import LoadFinishCondition, LoadThread
+from Data.SqlClient import DatabaseClient
 
 class Stock(ABC):
     # https://www.jianshu.com/p/2f45fcb44771
     def __init__(self):
         super(Stock, self).__init__()
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.averaged = {}
         self.selected_data = None
         self.client = DatabaseClient()
@@ -229,8 +230,8 @@ class Stock(ABC):
         if not os.path.exists("industries"):
             os.makedirs("industries")
 
-        if (os.path.exists("joined.csv")):
-            joined = pd.read_csv("joined.csv")
+        if (os.path.exists(os.path.join(self.localDir, "joined.csv"))):
+            joined = pd.read_csv(os.path.join(self.localDir, "joined.csv"))
         else:
             industryNames = list(industries.groups.keys())
             grouped = self.chunkIt(industryNames, threadNum)
@@ -260,7 +261,7 @@ class Stock(ABC):
                     joined = pd.merge(joined, averaged_industry, on="times", how='outer')
 
             joined = joined.sort_values(by="times")
-            joined.to_csv("joined.csv",index=False)
+            joined.to_csv(os.path.join(self.localDir, "joined.csv"),index=False)
 
         # fig, ax = plt.subplots()
         # meanData = joined.drop("times", axis=1)
@@ -296,7 +297,7 @@ class Stock(ABC):
         industries = self.m_stockList.groupby("industry")
         industryNames = list(industries.groups.keys())
         industryName = random.sample(industryNames,1)[0]
-        filename = os.path.join("industries", "{}.csv".format(industryName))
+        filename = os.path.join(self.localDir, "industries", "{}.csv".format(industryName))
         if os.path.exists(filename):
             data = pd.read_csv(filename)
             titles = list(data.columns)
@@ -309,7 +310,8 @@ class Stock(ABC):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
-        wicon = QtGui.QIcon("resources/Artboard 1.png")
+        self.localDir = os.path.dirname(os.path.realpath(__file__))
+        wicon = QtGui.QIcon(os.path.join(self.localDir, "icons", "Artboard 1.png"))
         self.setWindowIcon(wicon)
 
         self.stock = Stock()
@@ -392,7 +394,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for i in range(self.checkBoxListWidget.count()):
             item = self.checkBoxListWidget.item(i)
             item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.Unchecked)
+            item.setCheckState(QtCore.Qt.Checked)  # Unchecked
             color = QtGui.QColor()
             color.setHsv(*self.colorMap[i])
             item.setBackground(QtGui.QBrush(color))
@@ -421,6 +423,7 @@ class MainWindow(QtWidgets.QMainWindow):
         ax = self.graphWidget.getAxis('bottom')
         ticks = [list(zip(range(0, num, 10), [self.times[i] for i in range(0, num, 10)]))]
         ax.setTicks(ticks)
+        self.graphWidget.enableAutoRange(y=True)
 
     def curveClicked2(self):
         print("curveClicked2")
