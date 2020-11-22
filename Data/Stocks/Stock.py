@@ -2,40 +2,34 @@
 import urllib.request
 import json
 from abc import ABC
-import pprint
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
 from bs4 import BeautifulSoup
 import requests
 from selenium import webdriver
-import sys
-import gzip
 
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 import time
 import itertools
 
-import matplotlib.font_manager as font_manager
-pd.set_option('display.max_columns', 20)
 import copy
 from sklearn import preprocessing
-from PyQt5 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
 import random
 import tqdm
 
 from Data.Stocks.Loader import LoadFinishCondition, LoadThread
 from Data.SqlClient import DatabaseClient
+pd.set_option('display.max_columns', 20)
+
 
 class Stock(ABC):
     # https://www.jianshu.com/p/2f45fcb44771
     def __init__(self):
         super(Stock, self).__init__()
         self.localDir = os.path.dirname(os.path.realpath(__file__))
-        self.averaged = {}
+        self.collection = {}
         self.selected_data = None
         self.client = DatabaseClient()
 
@@ -44,14 +38,6 @@ class Stock(ABC):
 
         self.m_stockList = pd.DataFrame(columns=["industry", "name", "symbol"])
         self.loadStockListFromDB()
-
-        # self.m_hsIndexTotal = None
-        # self.m_hsIndexToday = None
-        # self.readHSIndex(True)
-        #
-        # self.m_szList = None
-        # self.m_shAList = None
-        # self.m_shSciInnoList = None
 
     def loadIndustryListFromDB(self):
         df = self.client.readTableNames()
@@ -95,7 +81,7 @@ class Stock(ABC):
             # print("hsIndex today", self.m_hsIndexToday.head(5))
 
         if p_draw:
-            self.m_hsIndexTotal.plot(x="times", y="closes", title="HS index", figsize=(10,4))
+            self.m_hsIndexTotal.plot(x="times", y="closes", title="HS index", figsize=(10, 4))
             plt.title("HS index", fontproperties='SimHei', fontsize='large')
             plt.show()
 
@@ -113,7 +99,7 @@ class Stock(ABC):
             original_link = child.get("href")
             code = int(original_link.split(".")[0].split("hy")[1])
             link = "http://quote.eastmoney.com/center/boardlist.html#boards-BK{:04d}1".format(code)
-            self.m_industryList = self.m_industryList.append({"industry":child.get("title"), "link":link},
+            self.m_industryList = self.m_industryList.append({"industry": child.get("title"), "link": link},
                                                              ignore_index=True)
 
         print("Created new industry list")
@@ -154,11 +140,12 @@ class Stock(ABC):
         fireFoxOptions.add_argument('--no-sandbox')
         browser = webdriver.Firefox(firefox_options=fireFoxOptions, executable_path=r"geckodriver.exe")
         for index, row in tqdm.tqdm(self.m_industryList.iterrows()):
-            print("{}/{}: Getting {} information ({})".format(index, len(self.m_industryList), row["industry"], row['link']))
+            print("{}/{}: Getting {} information ({})".format(index, len(self.m_industryList), row["industry"],
+                                                              row['link']))
             industry_url = row['link']
             browser.get(industry_url)
             # time.sleep(5)
-            WebDriverWait(browser, timeout=10).until(LoadFinishCondition()) # , poll_frequency=5
+            WebDriverWait(browser, timeout=10).until(LoadFinishCondition())  # , poll_frequency=5
             html = browser.page_source
             soup = BeautifulSoup(html, 'html.parser')
             while True:
@@ -230,7 +217,7 @@ class Stock(ABC):
         if not os.path.exists("industries"):
             os.makedirs("industries")
 
-        if (os.path.exists(os.path.join(self.localDir, "joined.csv"))):
+        if os.path.exists(os.path.join(self.localDir, "joined.csv")):
             joined = pd.read_csv(os.path.join(self.localDir, "joined.csv"))
         else:
             industryNames = list(industries.groups.keys())
@@ -245,14 +232,14 @@ class Stock(ABC):
                 threads[n].join()
 
             joined = None
-            for idx, (name, data) in enumerate(self.averaged.items()):
+            for idx, (name, data) in enumerate(self.collection.items()):
                 averaged_industry = pd.DataFrame(columns=["times", name])
                 averaged_industry["times"] = data["times"].tolist()
                 data = data.fillna(0)
 
                 temp = copy.deepcopy(data).drop("times", axis=1)
                 nonZeroNum = temp.gt(0).sum(axis=1)
-                temp = temp.sum(axis=1)/nonZeroNum
+                temp = temp.sum(axis=1) / nonZeroNum
                 averaged_industry[name] = temp
 
                 if joined is None:
@@ -261,203 +248,25 @@ class Stock(ABC):
                     joined = pd.merge(joined, averaged_industry, on="times", how='outer')
 
             joined = joined.sort_values(by="times")
-            joined.to_csv(os.path.join(self.localDir, "joined.csv"),index=False)
-
-        # fig, ax = plt.subplots()
-        # meanData = joined.drop("times", axis=1)
-        # meanData = meanData.mean(axis=0)
-        # print("meanData", meanData)
-        # font = font_manager.FontProperties(family='SimHei', style='normal', size=6)
-        # meanData.plot.bar(ax=ax, grid=True)
-        # plt.xticks(fontname="SimHei")
-        # plt.legend(loc='best', ncol=4, prop=font)
-        # plt.title("Industries", fontproperties='SimHei', fontsize='large')
-        # plt.show()
+            joined.to_csv(os.path.join(self.localDir, "joined.csv"), index=False)
 
         min_max_scaler = preprocessing.MinMaxScaler()
         self.selected_data = joined.tail(showRows)
 
-        # # print("current_data column title:", self.selected_data.columns)
-        # scaled_array = min_max_scaler.fit_transform(self.selected_data.drop(["times"], axis=1))
-        # df_normalized = pd.DataFrame(scaled_array)
-        # df_normalized.columns = list(self.selected_data.drop(["times"], axis=1).columns.values)
-        # df_normalized["times"] = self.selected_data["times"].values
-        # self.selected_data = df_normalized
-
-        # industry_names = self.averaged.keys()
-        # fig, ax = plt.subplots()
-        # for name in industry_names:
-        #     ax = df_normalized.plot(ax=ax, kind='line', x='times', y=name, label=name, grid=True)
-        # font = font_manager.FontProperties(family='SimHei', style='normal', size=6)
-        # plt.legend(loc='best',ncol=4, prop=font)
-        # plt.title("Industries", fontproperties='SimHei', fontsize='large')
-        # plt.show()
-
     def getRandomStock(self):
         industries = self.m_stockList.groupby("industry")
         industryNames = list(industries.groups.keys())
-        industryName = random.sample(industryNames,1)[0]
+        industryName = random.sample(industryNames, 1)[0]
         filename = os.path.join(self.localDir, "industries", "{}.csv".format(industryName))
         if os.path.exists(filename):
             data = pd.read_csv(filename)
             titles = list(data.columns)
             titles.remove("times")
-            return data[["times",titles[0]]]
+            return data[["times", titles[0]]]
         else:
             print("Cannot find {} in industries directory".format(filename))
             return None
 
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
-        self.localDir = os.path.dirname(os.path.realpath(__file__))
-        wicon = QtGui.QIcon(os.path.join(self.localDir, "icons", "Artboard 1.png"))
-        self.setWindowIcon(wicon)
-
-        self.stock = Stock()
-        self.colorMap = None
-        self.lastPen = None
-        self.lastItem = None
-
-        self.stock.calculateIndustryPerformance()
-
-        self.mainWidget = QtWidgets.QWidget()
-        self.setCentralWidget(self.mainWidget)
-
-        mainLayout = QtWidgets.QHBoxLayout(self)
-        self.mainWidget.setLayout(mainLayout)
-
-        self.graphWidget = pg.PlotWidget()
-        self.graphWidget.setAspectLocked(10)
-        mainLayout.addWidget(self.graphWidget,5)
-
-        controlWidget = QtWidgets.QWidget()
-        mainLayout.addWidget(controlWidget,1)
-
-        controlLayout = QtWidgets.QVBoxLayout(self)
-        controlWidget.setLayout(controlLayout)
-
-        self.checkBoxListWidget = QtWidgets.QListWidget(self)
-        self.dataDict = {}
-        # self.checkBoxList = []
-        controlLayout.addWidget(self.checkBoxListWidget)
-        self.loadButton = QtWidgets.QPushButton("load", self)
-        self.refreshButton = QtWidgets.QPushButton("refresh", self)
-        self.loadButton.clicked.connect(self.refreshList)
-        self.refreshButton.clicked.connect(self.updatePlot)
-        controlLayout.addWidget(self.loadButton)
-        controlLayout.addWidget(self.refreshButton)
-
-        hour = [1,2,3,4,5,6,7,8,9,10]
-        temperature = [30,32,34,32,33,31,29,32,35,45]
-
-        self.graphWidget.setBackground('w')
-        self.graphWidget.scene().sigMouseClicked.connect(self.curveClicked)
-        self.curves = {}
-
-    def setYRange(self, range):
-        self.enableAutoRange(axis='y')
-        self.setAutoVisible(y=True)
-
-    def colors(self, n):
-        ret = []
-        VNum = 10
-        SNum = n//10
-        rest = n%10
-        offset = 120
-        for i in range(VNum):
-            h = int(i * 255 / VNum)
-            for j in range(SNum):
-                s = int(offset + j * (255-offset) / SNum)
-                ret.append((h, s, 200))
-        for k in range(rest):
-            t = int(k * 255 / rest)
-            ret.append((t, t, t))
-        return ret
-
-    def refreshList(self):
-        temp = self.stock.selected_data.to_dict()
-        # self.checkBoxDict = {'保险': {0: 72.26, 1: 72.27285714285713, 2: 73.07000000000001, ...
-        self.times = temp.pop("times")
-
-        self.times = [value for (key, value) in sorted(self.times.items())]
-        print("times", self.times)
-
-        for key, value in temp.items():
-            self.dataDict[key] = [value1 for (key1, value1) in sorted(value.items())]
-
-        self.colorMap = self.colors(len(self.dataDict))
-
-        for key, value in self.dataDict.items():
-            self.checkBoxListWidget.addItem(key)
-
-        for i in range(self.checkBoxListWidget.count()):
-            item = self.checkBoxListWidget.item(i)
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.Checked)  # Unchecked
-            color = QtGui.QColor()
-            color.setHsv(*self.colorMap[i])
-            item.setBackground(QtGui.QBrush(color))
-        self.checkBoxListWidget.itemChanged.connect(self.updatePlot)
-        self.updatePlot()
-
-    def updatePlot(self):
-        # self.graphWidget.clear()
-        num = None
-        for i in range(self.checkBoxListWidget.count()):
-            item = self.checkBoxListWidget.item(i)
-            text = item.text()
-            checked = item.checkState()
-
-            num = len(self.dataDict[text])
-            if text in self.curves:
-                self.curves[text].setVisible(checked)
-            else:
-                color = QtGui.QColor()
-                color.setHsv(*self.colorMap[i])
-                item = self.graphWidget.plot(np.arange(num), self.dataDict[text], pen=pg.mkPen(color=color, width=1))
-                self.curves[text] = item
-                print(text, self.curves[text].curve)
-                self.curves[text].setVisible(checked)
-
-        ax = self.graphWidget.getAxis('bottom')
-        ticks = [list(zip(range(0, num, 10), [self.times[i] for i in range(0, num, 10)]))]
-        ax.setTicks(ticks)
-        self.graphWidget.enableAutoRange(y=True)
-
-    def curveClicked2(self):
-        print("curveClicked2")
-
-    def curveClicked(self, ev):
-        print("clicked")
-        if self.lastItem is not None:
-            self.lastItem.setPen(self.lastPen)
-
-        # print(self.graphWidget.scene().itemsNearEvent(ev))
-        for item in self.graphWidget.scene().itemsNearEvent(ev):
-            if (isinstance(item, pg.PlotCurveItem)):
-                self.lastPen = item.opts["pen"]
-                self.lastItem = item
-                item.setPen(pg.mkPen(item.opts["pen"].color(), width=2, style=QtCore.Qt.DashLine))
-
-                # name = list(self.curves.keys())[list(self.curves.values()).index(item)]
-                for index, (name, curve) in enumerate(self.curves.items()):
-                    if curve.curve == item:
-                        print("selected curve", name)
-                        self.checkBoxListWidget.setCurrentRow(index)
-                break
-
-def main():
-    app = QtWidgets.QApplication(sys.argv)
-    main = MainWindow()
-    main.show()
-    sys.exit(app.exec_())
 
 if __name__ == '__main__':
-    # stock = Stock()
-    # # stock.correctTimes()
-    # stock.calculateIndustryPerformance()
-    # # stock.readStock(stock.m_stockList["symbol"].tolist()[10], stock.m_stockList["industry"].tolist()[10])
-    main()
-
-    # stock = Stock()
+    stock = Stock()

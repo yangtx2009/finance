@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from scipy import signal as sci_signal
 import tensorflow as tf
 
-from Stock import Stock
+from Data.Stocks.Stock import Stock
+
 
 def drawData(numpy_data, processed, title):
     if not (numpy_data is None):
@@ -23,7 +24,7 @@ def drawData(numpy_data, processed, title):
         axs[0].set_title(title, fontproperties=font)
 
         axs[0].plot('index', "value", data=numpy_data)
-        ticks = np.linspace(0, numpy_data.shape[0]-1, 20, dtype=int)
+        ticks = np.linspace(0, numpy_data.shape[0] - 1, 20, dtype=int)
         axs[0].set_xticks(ticks)
         axs[0].set_xticklabels([numpy_data["times"][i] for i in ticks])
         axs[0].format_ydata = lambda x: '$%1.2f' % x  # format the price.
@@ -38,6 +39,7 @@ def drawData(numpy_data, processed, title):
         # axes up to make room for them
         fig.autofmt_xdate()
         plt.show()
+
 
 def preprocessing(data):
     # remove nan
@@ -56,6 +58,7 @@ def preprocessing(data):
     numpy_data = data.to_records()
     return titles, numpy_data
 
+
 def showFakeData():
     startDate = datetime.fromordinal(733828)
     dateStr = startDate.strftime('%Y.%m.%d')
@@ -71,11 +74,13 @@ def showFakeData():
     fig.autofmt_xdate()
     plt.show()
 
+
 def lowPassFilter(data):
     # https://www.cnblogs.com/xiaosongshine/p/10831931.html
     b, a = sci_signal.butter(8, 0.1, 'low', analog=False)  # 配置滤波器 8 表示滤波器的阶数
     filtedData = sci_signal.filtfilt(b, a, data)
     return filtedData
+
 
 def showRandomCurve(stock):
     print("Showing random curve")
@@ -84,6 +89,7 @@ def showRandomCurve(stock):
     titles, numpy_data = preprocessing(data)
     processed = lowPassFilter(numpy_data['value'])
     drawData(numpy_data, processed, titles[0])
+
 
 def createLabels(input_length=30, output_length=7):
     '''
@@ -94,7 +100,6 @@ def createLabels(input_length=30, output_length=7):
     @return:
     '''
     pass
-
 
 
 if __name__ == '__main__':
