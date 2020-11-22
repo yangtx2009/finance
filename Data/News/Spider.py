@@ -10,8 +10,10 @@ import threadpool
 code_list = []
 actions = []
 time_ms = int(round(time.time() * 1000))
+
+
 # 获取基金代码和名称
-def  getJJCode_Name(page=1):
+def getJJCode_Name(page=1):
     url = "http://fund.eastmoney.com/Data/Fund_JJJZ_Data.aspx?t=1&lx=1&letter=&gsid=&text=&sort=zdf,desc&page=" \
           + str(page) + ",200&dt=1562661541203&atfc=&onlySale=0"
     js_var = requests.get(url).text
@@ -22,7 +24,7 @@ def  getJJCode_Name(page=1):
     for data in datas:
         print(data[0] + '  ' + data[1])
         code_list.append(data[0])
-        action =fund_breif(data[0])
+        action = fund_breif(data[0])
         actions.append(action)
     helpers.bulk(es, actions)
     actions.clear()
@@ -73,11 +75,11 @@ def fund_breif(code):
         "_type": "_doc",
         "_source": {
             "fund_full_name": row_1_td_1.get_text(),
-            'fund_name': row_1_td_2.get_text(),
-             'fund_code': code,
+            "fund_name": row_1_td_2.get_text(),
+            "fund_code": code,
             "fund_type": row_2_td_2.get_text(),
-             "issue_date": row_3_td_1.get_text(),
-             "establish_date": row_3_td_2.get_text(),
+            "issue_date": row_3_td_1.get_text(),
+            "establish_date": row_3_td_2.get_text(),
             "aum": row_4_td_1.get_text(),
             "share_size": row_4_td_2.get_text(),
             "company": row_5_td_1.get_text()
@@ -89,7 +91,7 @@ def fund_breif(code):
 # 获取净值
 def net_value(code, curr_page=1):
     url = "http://api.fund.eastmoney.com/f10/lsjz?callback=fun&fundCode=000209&pageIndex="\
-          + str(curr_page) + "&pageSize=200&startDate=&endDate=&_="+ str(time_ms)
+          + str(curr_page) + "&pageSize=200&startDate=&endDate=&_=" + str(time_ms)
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE',
@@ -104,9 +106,9 @@ def net_value(code, curr_page=1):
         danweijingzhi = 0
         lishijingzhi = 0
         zengzhanglv = 0
-        if d['DWJZ'].isdecimal() :
+        if d['DWJZ'].isdecimal():
             danweijingzhi = float(d['DWJZ'])
-        if d['LJJZ'].isdecimal() :
+        if d['LJJZ'].isdecimal():
             lishijingzhi = float(d['LJJZ'])
         if d['JZZZL'].isdecimal():
             print("d = " + d['JZZZL'])
@@ -117,8 +119,8 @@ def net_value(code, curr_page=1):
             "_index": "fund_netvalue",
             "_type": "_doc",
             "_source": {
-                "code" : code,
-                "date" : d['FSRQ'],
+                "code": code,
+                "date": d['FSRQ'],
                 "danweijingzhi": danweijingzhi,
                 "lishijingzhi": lishijingzhi,
                 "zengzhanglv": zengzhanglv
@@ -129,7 +131,7 @@ def net_value(code, curr_page=1):
 
     print('current page --->' + str(mes['PageIndex']))
 
-    if int(mes['TotalCount']) > int(mes['PageSize'])* int(mes['PageIndex']) :
+    if int(mes['TotalCount']) > int(mes['PageSize']) * int(mes['PageIndex']):
         c_page = int(mes['PageIndex']) + 1
         net_value(code, c_page)
 
@@ -140,9 +142,9 @@ def netvalue_threadpool():
     [pool.putRequest(req) for req in t_reqs]
     pool.wait()
 
+
 if __name__ == '__main__':
     es = Elasticsearch([{"host": "192.168.31.213", "port": 9200}])
     # getJJCode_Name()
     netvalue_threadpool()
-
     # net_value("001195", curr_page=1)

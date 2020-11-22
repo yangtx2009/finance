@@ -1,4 +1,3 @@
-import feedparser
 import pprint
 
 rss_urls = ["http://feeds.reuters.com/reuters/topNews",
@@ -12,9 +11,4 @@ rss_urls = ["http://feeds.reuters.com/reuters/topNews",
             "https://www.spiegel.de/international/index.rss"]
 
 if __name__ == '__main__':
-    feed = feedparser.parse(rss_urls[4])
-    # pprint.pprint(feed)
-    print(len(feed))
-    print(feed.entries[0].keys())
-    print(feed.entries[0].title)
-    print(feed.entries[0].published)
+    pass

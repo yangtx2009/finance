@@ -29,7 +29,7 @@ class Viewer:
         self.lines = list()
         for index, (key, value) in enumerate(data.items()):
             stock = [value1 for (key1, value1) in sorted(value.items())]
-            line, = ax.plot(self.timesList, stock, visible=True, lw=1, label=key, color=self.colors[index])
+            line, = ax.plot(self.timesList, stock, visible=False, lw=1, label=key, color=self.colors[index])
             self.lines.append(line)
 
         ax.xaxis.set_major_locator(MultipleLocator(5))
