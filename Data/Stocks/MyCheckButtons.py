@@ -3,7 +3,7 @@ from matplotlib.patches import Circle, Rectangle, Ellipse
 import numpy as np
 from matplotlib.widgets import AxesWidget
 from matplotlib.lines import Line2D
-
+import copy
 
 class MyCheckButtons(AxesWidget):
     r"""
@@ -45,12 +45,20 @@ class MyCheckButtons(AxesWidget):
         """
         AxesWidget.__init__(self, ax)
 
+        labels = copy.deepcopy(labels)
+
+        labels.append("select all")
+        labels.append("unselect all")
+        print("colors", colors)
+        colors = colors+["#000000"]*2
+
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_navigate(False)
 
         if actives is None:
             actives = [False] * len(labels)
+        actives = actives+[False]*2
 
         if len(labels) > 1:
             dy = 1. / (len(labels) + 1)
@@ -119,7 +127,7 @@ class MyCheckButtons(AxesWidget):
                 self.set_active(i)
                 break
 
-    def set_active(self, index):
+    def set_active(self, index, force=None):
         """
         Toggle (activate or deactivate) a check button by index.
 
@@ -129,26 +137,34 @@ class MyCheckButtons(AxesWidget):
         ----------
         index : int
             Index of the check button to toggle.
-
+        force : bool
+            force box activated or deactivated
         Raises
         ------
         ValueError
             If *index* is invalid.
         """
         if not 0 <= index < len(self.labels):
-            raise ValueError("Invalid CheckButton index: %d" % index)
+            raise ValueError("Invalid CheckButton index: {:d}/{:d}".format(index, len(self.labels)))
 
         l1, l2 = self.lines[index]
-        l1.set_visible(not l1.get_visible())
-        l2.set_visible(not l2.get_visible())
+
+        if force is None:
+            l1.set_visible(not l1.get_visible())
+            l2.set_visible(not l2.get_visible())
+        else:
+            l1.set_visible(force)
+            l2.set_visible(force)
 
         if self.drawon:
             self.ax.figure.canvas.draw()
 
         if not self.eventson:
             return
-        for cid, func in self.observers.items():
-            func(self.labels[index].get_text())
+
+        if force is None:
+            for cid, func in self.observers.items():
+                func(self.labels[index].get_text())
 
     def get_status(self):
         """

@@ -39,6 +39,8 @@ class Stock(ABC):
         self.m_stockList = pd.DataFrame(columns=["industry", "name", "symbol"])
         self.loadStockListFromDB()
 
+        self.loadStocks()
+
     def loadIndustryListFromDB(self):
         df = self.client.readTableNames()
 
@@ -210,17 +212,21 @@ class Stock(ABC):
             last += avg
         return out
 
-    def calculateIndustryPerformance(self, threadNum=30, showRows=100):
-        print("Calculating industry performance ...")
+    def loadStocks(self, threadNum=30):
         industries = self.m_stockList.groupby("industry")
-
         if not os.path.exists("industries"):
             os.makedirs("industries")
 
-        if os.path.exists(os.path.join(self.localDir, "joined.csv")):
-            joined = pd.read_csv(os.path.join(self.localDir, "joined.csv"))
-        else:
-            industryNames = list(industries.groups.keys())
+        industryNames = list(industries.groups.keys())
+
+        temp = industryNames
+        for industryName in temp:
+            path = os.path.join("industries", "{}.csv".format(industryName))
+            if os.path.exists(path):
+                industryNames.remove(industryName)
+                self.collection[industryName] = pd.read_csv(path)
+
+        if len(industryNames) > 0:
             grouped = self.chunkIt(industryNames, threadNum)
             threads = list()
             for n in range(threadNum):
@@ -230,7 +236,16 @@ class Stock(ABC):
             print("Waiting for reading stocks ...")
             for n in range(threadNum):
                 threads[n].join()
+        else:
+            print("Already read all stocks ...")
 
+    def calculateIndustryPerformance(self, showRows=100):
+        print("Calculating industry performance ...")
+        industries = self.m_stockList.groupby("industry")
+
+        if os.path.exists(os.path.join(self.localDir, "joined.csv")):
+            joined = pd.read_csv(os.path.join(self.localDir, "joined.csv"))
+        else:
             joined = None
             for idx, (name, data) in enumerate(self.collection.items()):
                 averaged_industry = pd.DataFrame(columns=["times", name])
@@ -239,6 +254,8 @@ class Stock(ABC):
 
                 temp = copy.deepcopy(data).drop("times", axis=1)
                 nonZeroNum = temp.gt(0).sum(axis=1)
+                if name == "珠宝首饰":
+                    print("珠宝首饰", nonZeroNum)
                 temp = temp.sum(axis=1) / nonZeroNum
                 averaged_industry[name] = temp
 
@@ -250,7 +267,6 @@ class Stock(ABC):
             joined = joined.sort_values(by="times")
             joined.to_csv(os.path.join(self.localDir, "joined.csv"), index=False)
 
-        min_max_scaler = preprocessing.MinMaxScaler()
         self.selected_data = joined.tail(showRows)
 
     def getRandomStock(self):

@@ -9,6 +9,10 @@ import time
 import requests
 import matplotlib.pyplot as plt
 import sys
+import urllib.request
+import urllib.error
+import json
+import gzip
 
 
 class LoadThread(threading.Thread):
@@ -60,6 +64,9 @@ class LoadThread(threading.Thread):
             stockData["times"] = ["{}.{}.{}".format(str(t)[:4], str(t)[4:6], str(t)[6:8]) for t in
                                   stockData["times"].tolist()]
             stockData = stockData.sort_values(by=['times'])
+            # remove the last day, because the stock values on the last day are usually wrong
+            stockData.drop(stockData.tail(1).index, inplace=True)
+
             stockData.to_csv(filename, index=False)
             self.stock.collection[name] = stockData
 
@@ -93,7 +100,19 @@ class LoadThread(threading.Thread):
         url = "http://img1.money.126.net/data/{}/{}/{}/times/{}{}.json".format(p_hs,
                                                                                p_stockSplit, p_period, prefix, fullCode)
         # print("URL:", url)
-        l_jsonData = requests.get(url).json()
+        try:
+            response = requests.get(url, timeout=5)
+            # response = urllib.request.urlopen(url, timeout=5)
+        except requests.exceptions.Timeout:
+            print("try get json again")
+            time.sleep(5)
+            response = requests.get(url, timeout=10)
+
+        if response.status_code != 200:
+            raise Warning("Http code: {}".format(response.status_code))
+
+        l_jsonData = response.json()  # utf-8
+
         # print("stock", l_jsonData["name"])
         data = pd.DataFrame(data={"times": l_jsonData["times"], "closes": l_jsonData["closes"]})
 
