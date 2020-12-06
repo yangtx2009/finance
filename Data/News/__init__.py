@@ -1,5 +1,4 @@
 import os
-from . import Source
 
 print("news init")
 

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import os
 
+
 class DatabaseClient:
     def __init__(self):
         self._username = ""
@@ -19,7 +20,8 @@ class DatabaseClient:
         self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.readAuthority()
 
-        self.engine = create_engine('mysql+pymysql://{}:{}@localhost:3306/finance'.format(self._username, self._password))
+        self.engine = create_engine(
+            'mysql+pymysql://{}:{}@localhost:3306/finance'.format(self._username, self._password))
         # self.mydb = MySQLdb.connect(
         #     host="localhost",
         #     port=3306,
@@ -30,6 +32,9 @@ class DatabaseClient:
         DB_Session = sessionmaker(bind=self.engine)
         self.session = DB_Session()
         # self.mycursor.execute("USE finance")
+
+    def disconnect(self):
+        self.session.close()
 
     def readAuthority(self):
         with open(os.path.join(self.localDir, "password.txt"), 'r') as file:
@@ -43,10 +48,14 @@ class DatabaseClient:
     """
     show methods
     """
-    def showTable(self, tableName:str):
-        df = pd.read_sql("SELECT * FROM "+tableName, con=self.engine)
+
+    def showTable(self, tableName):
+        df = pd.read_sql("SELECT * FROM " + tableName, con=self.engine)
         print(df)
         print("====================")
+
+    def tableExist(self, tableName):
+        return self.engine.dialect.has_table(self.engine, tableName)
 
     def showAllTables(self):
         df = pd.read_sql("SHOW TABLES", con=self.engine)
@@ -56,11 +65,12 @@ class DatabaseClient:
     """
     read methods
     """
+
     def readTableNames(self):
         return pd.read_sql("SHOW TABLES", con=self.engine)
 
     def readTable(self, tableName):
-        return pd.read_sql("SELECT * FROM "+tableName, con=self.engine)
+        return pd.read_sql("SELECT * FROM " + tableName, con=self.engine)
 
     def readColumn(self, colName, tableName):
         """
@@ -93,10 +103,12 @@ class DatabaseClient:
     """
     store methods
     """
+
     def createTable(self, tableName, head, primaryKey):
         """
-        @param tableName (str):
-        @param head (list(str)): name type
+        @param tableName:
+        @param head: name type
+        @param primaryKey:
         @return:
         """
         self.session.execute("CREATE TABLE {} ({}, PRIMARY KEY ({}));".format(tableName, ','.join(head), primaryKey))
@@ -104,12 +116,23 @@ class DatabaseClient:
     def insertData(self, tableName, values):
         temp = self.readTable(tableName)
         head = temp.head()
-        if len(values) == len(head):
-            pattern = "INSERT INTO %s (%s) VALUES (%s)"
-            strValue = [str(value) for value in values]
-            self.session.execute(pattern, (tableName, ",".join(head), ",".join(strValue)))
 
-    def storeData(self, tableName:str, dataFrame:pd.DataFrame, ifExists='fail'):
+        pattern = "INSERT INTO {:} ({:}) VALUES ({:});"
+
+        if isinstance(values, list):
+            if len(values) == len(head):
+                strValue = [str(value) for value in values]
+                command = pattern.format(tableName, ",".join(head), self.mergeString(strValue))
+                print("command:", command)
+                self.session.execute(command)
+            else:
+                print("wrong value list length: wanted", len(head), ", got", len(values))
+        elif isinstance(values, dict):
+            command = pattern.format(tableName, ",".join(values.keys()), self.mergeString(values.values()))
+            print("command:", command)
+            self.session.execute(command)
+
+    def storeData(self, tableName, dataFrame, ifExists='fail'):
         dataFrame.to_sql(tableName, con=self.engine, if_exists=ifExists, index=False)
 
     def updateData(self, tableName, pair, condition=None):
@@ -128,8 +151,19 @@ class DatabaseClient:
     """
     Drop (Delete) table
     """
+
     def deleteTable(self, tableName):
         self.session.execute("DROP TABLE IF EXISTS {};".format(tableName))
+
+    def mergeString(self, values):
+        ret = ""
+        for index, value in enumerate(values):
+            if isinstance(value, str):
+                ret += "\'"+value+"\'"
+            if index < len(values)-1:
+                ret += ","
+        return ret
+
 
 if __name__ == '__main__':
     client = DatabaseClient()

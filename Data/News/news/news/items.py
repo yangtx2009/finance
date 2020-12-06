@@ -1,3 +1,4 @@
+# -*- coding: utf-8-*-
 # Define here the models for your scraped items
 #
 # See documentation in:
@@ -6,7 +7,7 @@
 import scrapy
 
 
-class ScraperItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class NewsItem(scrapy.Item):
+    path = scrapy.Field()
+    topic = scrapy.Field()
+    content = scrapy.Field()
