@@ -2,6 +2,7 @@ import scrapy
 from scrapy.selector import Selector
 from pprint import pprint
 
+
 class BloombergSpider(scrapy.Spider):
     name = 'Bloomberg'
     allowed_domains = ['www.bloomberg.com/europe']
