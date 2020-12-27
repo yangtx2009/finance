@@ -59,6 +59,9 @@ class YahooStock(ABC):
         fig.tight_layout()
         plt.show()
 
+
 if __name__ == '__main__':
-    stock = YahooStock()
-    stock.getAllData()
+    # stock = YahooStock()
+    # stock.getAllData()
+
+    print(datetime.fromtimestamp(1608928401))

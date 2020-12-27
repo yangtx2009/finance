@@ -11,3 +11,12 @@ class NewsItem(scrapy.Item):
     path = scrapy.Field()
     topic = scrapy.Field()
     content = scrapy.Field()
+
+
+class DetailedNewsItem(scrapy.Item):
+    ID = scrapy.Field()
+    path = scrapy.Field()
+    topic = scrapy.Field()
+    content = scrapy.Field()
+    time = scrapy.Field()
+    comment_count = scrapy.Field()

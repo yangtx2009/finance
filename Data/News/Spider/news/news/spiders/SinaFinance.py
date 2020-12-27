@@ -5,13 +5,13 @@ import sys
 sys.path.append(r"D:\Projects\finance")
 print(sys.path)
 
-from Data.News.news.news.items import *
+from Data.News.Spider.news.news.items import *
 
 
 class SinafinanceSpider(scrapy.Spider):
     name = 'SinaFinance'
-    allowed_domains = ['finance.sina.com.cn/']
-    start_urls = ['https://finance.sina.com.cn//']
+    allowed_domains = ['s.weibo.com/top/summary?cate=socialevent']
+    start_urls = ['https://s.weibo.com/top/summary?cate=socialevent/']
 
     def parse(self, response, **kwargs):
         # blocks = response

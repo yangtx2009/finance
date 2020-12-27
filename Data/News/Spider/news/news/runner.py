@@ -1,6 +1,6 @@
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.log import configure_logging
-from Data.News.news.news.spiders.SinaFinance import SinafinanceSpider
+from Data.News.Spider.news.news.spiders.SinaFinance import SinafinanceSpider
 from Data.SqlClient import DatabaseClient
 
 
