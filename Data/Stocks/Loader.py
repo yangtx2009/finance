@@ -13,10 +13,11 @@ import urllib.request
 import urllib.error
 import json
 import gzip
+import sqlite3 as sl
 
 
 class LoadThread(threading.Thread):
-    def __init__(self, id, stock, keyList):
+    def __init__(self, id, stock, keyList, db_path, mutex):
         """
         @param id: thread id
         @param stock: stock class
@@ -27,50 +28,62 @@ class LoadThread(threading.Thread):
         self.id = id
         self.stock = stock
         self.keyList = keyList
-        self.localDir = os.path.dirname(os.path.realpath(__file__))
-        # print("Created thread {} ...".format(self.id))
+        self.db_conn = sl.connect(db_path, check_same_thread=False)
+        self.mutex = mutex
+
+    def __del__(self):
+        self.db_conn.close()
 
     def run(self):
-        industries = self.stock.m_stockList.groupby("industry")
+        industries = self.stock.stockList.groupby("industry")
 
-        for name, industry in industries:
-            if not (name in self.keyList):
+        for industry_name, data in industries:
+
+            if not (industry_name in self.keyList):
                 continue
             # print("------- {} -------".format(name))
-            filename = os.path.join(self.localDir, "industries", "{}.csv".format(name))
-            if os.path.exists(filename):
-                d = datetime.fromtimestamp(os.path.getmtime(filename))
-                now = datetime.now()
-                delta = now - d
-                days = delta.seconds // 360 // 24
-                if days < 7:
-                    self.stock.collection[name] = pd.read_csv(filename)
+            # in case the table does not exist
+            # print(f'checking {industry_name}')
+            # self.mutex.acquire()
+            # try:
+            #     self.db_conn.execute(f"""create table if not exists {industry_name} 
+            #                         (times DATETIME,
+            #                         PRIMARY KEY (times))""")
+            #     stock_data = pd.read_sql_query(f"select * from {industry_name}", self.db_conn, index_col=None)
+            # finally:
+            #     self.mutex.release()
+            stock_data = pd.DataFrame(columns=['times'], index=None)
+
+            symbols = data["symbol"].tolist()
+            stock_names = data["name"].tolist()
+
+            for idx, symbol in enumerate(symbols):
+                # if str(symbol).startswith('18'):
+                stock_name = stock_names[idx]
+
+                new_data = self.readStock(symbol, stock_name)
+                if new_data is None:
                     continue
 
-            symbols = industry["symbol"].tolist()
-            stockData = None
-            for idx in range(len(symbols)):
-                symbol = symbols[idx]
-                newData = self.readStock(symbol, p_draw=False)
-                if stockData is None:
-                    newData = newData.rename(columns={'closes': industry["name"].tolist()[idx]})
-                    stockData = newData
-                else:
-                    # different stock has different length
-                    # add them from tail
-                    newData = newData.rename(columns={'closes': industry["name"].tolist()[idx]})
-                    stockData = pd.merge(stockData, newData, on="times", how='outer')
+                # different stock has different length
+                # add them from tail
+                try:
+                    new_data = new_data.rename(columns={'closes': stock_name})
+                except ValueError:
+                    print("check strange stock:", symbol, industry_name, stock_name)
+                stock_data = pd.merge(stock_data, new_data, on="times", how='outer')
 
-            stockData["times"] = ["{}.{}.{}".format(str(t)[:4], str(t)[4:6], str(t)[6:8]) for t in
-                                  stockData["times"].tolist()]
-            stockData = stockData.sort_values(by=['times'])
+            stock_data = stock_data.sort_values(by=['times'])
             # remove the last day, because the stock values on the last day are usually wrong
-            stockData.drop(stockData.tail(1).index, inplace=True)
+            stock_data.drop(stock_data.tail(1).index, inplace=True)
 
-            stockData.to_csv(filename, index=False)
-            self.stock.collection[name] = stockData
+            self.mutex.acquire()
+            try:
+                stock_data.to_sql(industry_name, con=self.db_conn, if_exists='replace', index=False)
+            finally:
+                self.mutex.release()
 
-    def readStock(self, p_stockCode, stockType=None, p_hs="hs", p_stockSplit="klinederc", p_period="day", p_draw=True):
+    def readStock(self, p_stockCode, stock_name, stockType=None, p_hs="hs", p_stockSplit="klinederc", p_period="day"):
         """
         :@param p_stockCode:
             深圳股票：+1
@@ -84,6 +97,7 @@ class LoadThread(threading.Thread):
                 B股：900
                 新股：730
                 配股：700
+            4,8开头为新三板,普通用户无法交易4,8开头股票
         :@param stockType
         :@param p_hs: "hs",
         :@param p_stockSplit: "klinederc"/"kline"
@@ -93,7 +107,9 @@ class LoadThread(threading.Thread):
         """
         fullCode = "{:06d}".format(int(p_stockCode))
         # try:
-        if fullCode.startswith(("6", "7", "9")):
+        if fullCode.startswith(('4','8')):
+            return None
+        elif fullCode.startswith(("6", "7", "9")):
             prefix = "0"
         else:
             prefix = "1"
@@ -104,24 +120,22 @@ class LoadThread(threading.Thread):
             response = requests.get(url, timeout=5)
             # response = urllib.request.urlopen(url, timeout=5)
         except requests.exceptions.Timeout:
-            print("try get json again")
+            print(f"try get json again: {stock_name}")
             time.sleep(5)
             response = requests.get(url, timeout=10)
+        finally:
+            time.sleep(1)
 
         if response.status_code != 200:
-            raise Warning("Http code: {}".format(response.status_code))
+            print(f'fail to reach {stock_name}: {url}')
+            print("Http code: {}".format(response.status_code))
+            return None
 
-        l_jsonData = response.json()  # utf-8
+        json_data = response.json()  # utf-8
 
         # print("stock", l_jsonData["name"])
-        data = pd.DataFrame(data={"times": l_jsonData["times"], "closes": l_jsonData["closes"]})
-
-        if p_draw:
-            data.plot(x="times", y="closes", figsize=(10, 4), grid=True)
-            plt.title("{:} {:06d} {:}".format(l_jsonData["name"], int(p_stockCode), stockType), fontproperties='SimHei',
-                      fontsize='large')
-            plt.show()
-
+        data = pd.DataFrame(data={"times": json_data["times"], "closes": json_data["closes"]}, index=None)
+        data['times'] = pd.to_datetime(data['times'], format='%Y%m%d')
         return data
 
 
@@ -142,7 +156,7 @@ class LoadFinishCondition:
                 is_show_button_invisible = EC.invisibility_of_element_located((By.CLASS_NAME, "addzx"))(driver)
                 is_show_button_visible = not bool(is_show_button_invisible)
 
-                print("elements", is_table_visible, is_show_button_visible)
+                # print("elements", is_table_visible, is_show_button_visible)
                 if is_show_button_visible:
                     time.sleep(1)
                     return True

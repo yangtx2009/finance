@@ -147,3 +147,5 @@ Analyser/MachineLearning/data/*
 test
 geckodriver.log
 ghostdriver.log
+/*.db
+/*.sql

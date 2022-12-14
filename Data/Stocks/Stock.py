@@ -18,55 +18,52 @@ import copy
 from sklearn import preprocessing
 import random
 import tqdm
+import numpy as np
 
 from Data.Stocks.Loader import LoadFinishCondition, LoadThread
+from threading import Lock
 from Data.SqlClient import DatabaseClient
 pd.set_option('display.max_columns', 20)
 
 
 class Stock(ABC):
     # https://www.jianshu.com/p/2f45fcb44771
-    def __init__(self):
+    def __init__(self, db_conn, db_abs_path):
         super(Stock, self).__init__()
+        self.db_conn = db_conn
+        self.db_abs_path = db_abs_path
         self.localDir = os.path.dirname(os.path.realpath(__file__))
         self.collection = {}
         self.selected_data = None
-        self.client = DatabaseClient()
 
-        self.m_industryList = pd.DataFrame(columns=["industry", "link"])
+        self.industryList = pd.DataFrame(columns=["industry", "link"], index=None)
         self.loadIndustryListFromDB()
 
-        self.m_stockList = pd.DataFrame(columns=["industry", "name", "symbol"])
+        self.stockList = pd.DataFrame(columns=["industry", "name", "symbol"], index=None)
         self.loadStockListFromDB()
 
+        print(self.stockList)
         self.loadStocks()
 
-    def loadIndustryListFromDB(self):
-        df = self.client.readTableNames()
+    @property
+    def industry_list(self):
+        return self.industryList['industry'].tolist()
 
-        if "industry" in df.values:
-            self.m_industryList = self.client.readTable("industry")
-            print("industries\n", self.m_industryList)
-        else:
+    def loadIndustryListFromDB(self, force_reload=False):
+        self.industryList = pd.read_sql_query("SELECT * from industry", self.db_conn)
+        if len(self.industryList.index) == 0 or force_reload:
             self.readIndustryList()
-            self.client.createTable("industry", ["industry VARCHAR(255)", "link VARCHAR(255)"], "industry")
-            self.client.storeData("industry", self.m_industryList, "append")
-            self.client.showTable("industry")
+            self.industryList.sort_values(by='industry') 
+            self.industryList.to_sql('industry', con=self.db_conn, if_exists='replace', index=False)
 
-    def loadStockListFromDB(self):
-        df = self.client.readTableNames()
-        if "stock" in df.values:
-            print("Stock already exists in database")
-            self.m_stockList = self.client.readTable("stock")
-            print("stocks\n", self.m_stockList)
-        else:
-            print("Cannot find 'stock' in database. Creating it ...")
-            self.client.createTable("stock", ["industry VARCHAR(255)", "name VARCHAR(255)", "symbol VARCHAR(255)"],
-                                    "symbol")
+    def loadStockListFromDB(self, force_reload=False):
+        self.stockList = pd.read_sql_query("SELECT * from stock", self.db_conn)
+        
+        if len(self.stockList.index) == 0 or force_reload:
             self.readStockList()
-            self.m_stockList = self.m_stockList.drop_duplicates(subset=['symbol'])
-            self.client.storeData("stock", self.m_stockList, "append")
-            self.client.showTable("stock")
+            self.stockList.drop_duplicates(subset=['symbol'], inplace=True)
+            self.stockList.to_sql('stock', con=self.db_conn, if_exists='replace', index=False)
+            
 
     def readHSIndex(self, p_draw=False):
         url = "http://img1.money.126.net/data/hs/kline/day/times/1399001.json"
@@ -88,6 +85,9 @@ class Stock(ABC):
             plt.show()
 
     def readIndustryList(self):
+        # clear industry list
+        self.industryList.drop(self.industryList.index, inplace=True)
+
         print("Reading industry list ...")
         url = "http://stock.eastmoney.com/hangye.html"
         r = requests.get(url)
@@ -101,12 +101,9 @@ class Stock(ABC):
             original_link = child.get("href")
             code = int(original_link.split(".")[0].split("hy")[1])
             link = "http://quote.eastmoney.com/center/boardlist.html#boards-BK{:04d}1".format(code)
-            self.m_industryList = self.m_industryList.append({"industry": child.get("title"), "link": link},
+            self.industryList = self.industryList.append({"industry": child.get("title"), "link": link},
                                                              ignore_index=True)
-
         print("Created new industry list")
-        # self.m_industryList.to_csv("IndustryList.csv")
-        # print(self.m_industryList["industry"], "\n")
 
     def xpath_soup(self, element):
         """
@@ -141,8 +138,8 @@ class Stock(ABC):
         fireFoxOptions.add_argument('--disable-gpu')
         fireFoxOptions.add_argument('--no-sandbox')
         browser = webdriver.Firefox(firefox_options=fireFoxOptions, executable_path=r"geckodriver.exe")
-        for index, row in tqdm.tqdm(self.m_industryList.iterrows()):
-            print("{}/{}: Getting {} information ({})".format(index, len(self.m_industryList), row["industry"],
+        for index, row in tqdm.tqdm(self.industryList.iterrows()):
+            print("{}/{}: Getting {} information ({})".format(index, len(self.industryList), row["industry"],
                                                               row['link']))
             industry_url = row['link']
             browser.get(industry_url)
@@ -154,12 +151,13 @@ class Stock(ABC):
                 next_button_soup = None
                 self.findStocks(soup, row["industry"])
                 next_button_soup = soup.find("a", {"class", "next paginate_button"})
+
                 if next_button_soup:
                     xpath = self.xpath_soup(next_button_soup)
                     next_button = browser.find_element_by_xpath(xpath)
                     if next_button:
                         next_button.click()
-                        print("To next page")
+                        # print("To next page")
                         WebDriverWait(browser, timeout=10).until(LoadFinishCondition())
                         html = browser.page_source
                         soup = BeautifulSoup(html, 'html.parser')
@@ -167,13 +165,11 @@ class Stock(ABC):
                         print("Cannot find button component!")
                         break
                 else:
-                    print("Cannot find next page button!")
+                    # print("Cannot find next page button!")
                     break
-            self.m_stockList.to_csv("StockList.csv")
         browser.quit()
         print("Created new industry list")
-        # self.m_stockList.to_csv("StockList.csv")
-        print(self.m_stockList.head(5))
+        print(self.stockList.head(5))
 
         timeElapsed = (time.time() - startTime)
         print("The loading of stock list takes {} seconds".format(timeElapsed))
@@ -191,10 +187,10 @@ class Stock(ABC):
                 elif idx == 2:
                     temp["name"] = value.string
             # print("adding stock:", temp)
-            self.m_stockList = self.m_stockList.append(temp, ignore_index=True)
+            self.stockList = self.stockList.append(temp, ignore_index=True)
 
     def correctTimes(self):
-        industries = self.m_stockList.groupby("industry")
+        industries = self.stockList.groupby("industry")
         for name, industry in industries:
             filename = os.path.join("industries", "{}.csv".format(name))
             data = pd.read_csv(filename)
@@ -202,35 +198,17 @@ class Stock(ABC):
             data.to_csv(filename)
         print(data.head(10))
 
-    def chunkIt(self, seq, num):
-        avg = len(seq) / float(num)
-        out = []
-        last = 0.0
-
-        while last < len(seq):
-            out.append(seq[int(last):int(last + avg)])
-            last += avg
-        return out
-
     def loadStocks(self, threadNum=30):
-        industries = self.m_stockList.groupby("industry")
-        if not os.path.exists("industries"):
-            os.makedirs("industries")
-
+        industries = self.stockList.groupby("industry")
         industryNames = list(industries.groups.keys())
 
-        temp = industryNames
-        for industryName in temp:
-            path = os.path.join("industries", "{}.csv".format(industryName))
-            if os.path.exists(path):
-                industryNames.remove(industryName)
-                self.collection[industryName] = pd.read_csv(path)
-
         if len(industryNames) > 0:
-            grouped = self.chunkIt(industryNames, threadNum)
+            grouped = list(np.array_split(industryNames, threadNum))
             threads = list()
+
+            mutex = Lock()
             for n in range(threadNum):
-                threads.append(LoadThread(n, self, grouped[n]))
+                threads.append(LoadThread(n, self, grouped[n], self.db_abs_path, mutex))
                 threads[n].start()
 
             print("Waiting for reading stocks ...")
@@ -239,38 +217,8 @@ class Stock(ABC):
         else:
             print("Already read all stocks ...")
 
-    def calculateIndustryPerformance(self, showRows=100):
-        print("Calculating industry performance ...")
-        industries = self.m_stockList.groupby("industry")
-
-        if os.path.exists(os.path.join(self.localDir, "joined.csv")):
-            joined = pd.read_csv(os.path.join(self.localDir, "joined.csv"))
-        else:
-            joined = None
-            for idx, (name, data) in enumerate(self.collection.items()):
-                averaged_industry = pd.DataFrame(columns=["times", name])
-                averaged_industry["times"] = data["times"].tolist()
-                data = data.fillna(0)
-
-                temp = copy.deepcopy(data).drop("times", axis=1)
-                nonZeroNum = temp.gt(0).sum(axis=1)
-                if name == "珠宝首饰":
-                    print("珠宝首饰", nonZeroNum)
-                temp = temp.sum(axis=1) / nonZeroNum
-                averaged_industry[name] = temp
-
-                if joined is None:
-                    joined = averaged_industry
-                else:
-                    joined = pd.merge(joined, averaged_industry, on="times", how='outer')
-
-            joined = joined.sort_values(by="times")
-            joined.to_csv(os.path.join(self.localDir, "joined.csv"), index=False)
-
-        self.selected_data = joined.tail(showRows)
-
     def getRandomStock(self):
-        industries = self.m_stockList.groupby("industry")
+        industries = self.stockList.groupby("industry")
         industryNames = list(industries.groups.keys())
         industryName = random.sample(industryNames, 1)[0]
         filename = os.path.join(self.localDir, "industries", "{}.csv".format(industryName))
