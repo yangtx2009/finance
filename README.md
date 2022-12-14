@@ -5,7 +5,7 @@
 
 Comparison of total market values among industries in China
 
-![picture](resources\mean_value_industries_times_bokeh.png)
+![picture](resources/mean_value_industries_times_bokeh.png)
 
 <!---The comprehensive industry has the highest averaged value.--->
 
