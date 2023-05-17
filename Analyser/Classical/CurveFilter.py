@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from scipy import signal as sci_signal
 import tensorflow as tf
 
-from Data.Stocks.Stock import Stock
+from Data.Stocks.ChineseStock import ChineseStock
 
 
 def drawData(numpy_data, processed, title):
@@ -103,5 +103,5 @@ def createLabels(input_length=30, output_length=7):
 
 
 if __name__ == '__main__':
-    stock = Stock()
+    stock = ChineseStock()
     showRandomCurve(stock)

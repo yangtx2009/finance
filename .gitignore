@@ -149,3 +149,4 @@ geckodriver.log
 ghostdriver.log
 /*.db
 /*.sql
+secrets.json

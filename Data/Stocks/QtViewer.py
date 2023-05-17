@@ -3,7 +3,7 @@ import pyqtgraph as pg
 import os
 import sys
 
-from Data.Stocks.Stock import Stock
+from Data.Stocks.ChineseStock import ChineseStock
 
 
 class QtViewer(QtWidgets.QMainWindow):
@@ -13,7 +13,7 @@ class QtViewer(QtWidgets.QMainWindow):
         wicon = QtGui.QIcon(os.path.join(self.localDir, "icons", "Artboard 1.png"))
         self.setWindowIcon(wicon)
 
-        self.stock = Stock()
+        self.stock = ChineseStock()
         self.colorMap = None
         self.lastPen = None
         self.lastItem = None

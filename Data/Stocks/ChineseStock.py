@@ -26,10 +26,10 @@ from Data.SqlClient import DatabaseClient
 pd.set_option('display.max_columns', 20)
 
 
-class Stock(ABC):
+class ChineseStock(ABC):
     # https://www.jianshu.com/p/2f45fcb44771
     def __init__(self, db_conn, db_abs_path):
-        super(Stock, self).__init__()
+        super(ChineseStock, self).__init__()
         self.db_conn = db_conn
         self.db_abs_path = db_abs_path
         self.localDir = os.path.dirname(os.path.realpath(__file__))
@@ -233,4 +233,4 @@ class Stock(ABC):
 
 
 if __name__ == '__main__':
-    stock = Stock()
+    stock = ChineseStock()

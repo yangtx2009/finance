@@ -5,14 +5,14 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 
 from Data.Stocks.MyCheckButtons import MyCheckButtons
-from Data.Stocks.Stock import Stock
+from Data.Stocks.ChineseStock import ChineseStock
 import copy
 
 
 class Viewer:
     def __init__(self):
         self.localDir = os.path.dirname(os.path.realpath(__file__))
-        self.stock = Stock()
+        self.stock = ChineseStock()
         self.stock.calculateIndustryPerformance()
 
         data = self.stock.selected_data.to_dict()

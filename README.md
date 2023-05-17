@@ -1,4 +1,14 @@
+
+
 # finance
+
+## Prerequiste
+
+Export environment to yaml:
+```
+conda env export > environment.yml
+```
+
 ## Data Scraping
 
 ### Industries
