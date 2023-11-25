@@ -150,3 +150,6 @@ ghostdriver.log
 /*.db
 /*.sql
 secrets.json
+
+Data/News/apikeys.csv
+*.json
